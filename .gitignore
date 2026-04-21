@@ -1,1 +1,7 @@
 .DS_Store
+.venv/
+.cortex/
+CORTEX.md
+__pycache__/
+*.pyc
+cortex.egg-info/
