@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cortex"
+version = "0.1.0"
+description = "Persistent constraint layer for AI coding agents"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "click>=8.1",
+  "pydantic>=2.7",
+]
+
+[project.scripts]
+cortex = "cli.main:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["agents*", "cli*", "core*", "gardener*", "retrieval*", "viewer*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
