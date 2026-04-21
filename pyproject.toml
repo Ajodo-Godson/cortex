@@ -20,7 +20,7 @@ cortex = "cli.main:main"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-include = ["agents*", "cli*", "core*", "gardener*", "retrieval*", "viewer*"]
+include = ["agents*", "cli*", "core*", "gardener*", "retrieval*", "templates*", "viewer*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

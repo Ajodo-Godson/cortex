@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -47,3 +48,45 @@ def test_start_and_stop_session() -> None:
         assert stop_result.exit_code == 0
         assert not (repo_root / "CORTEX.md").exists()
         assert not (repo_root / ".cortex" / "session.lock").exists()
+
+
+def test_double_start_fails_when_session_is_active() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        repo_root = Path.cwd()
+        _init_fake_git_repo(repo_root)
+
+        first_start = runner.invoke(main, ["start", "--no-bootstrap"])
+        assert first_start.exit_code == 0
+
+        second_start = runner.invoke(main, ["start", "--no-bootstrap"])
+        assert second_start.exit_code != 0
+        assert "already active" in second_start.output
+
+        stop_result = runner.invoke(main, ["stop"])
+        assert stop_result.exit_code == 0
+
+
+def test_start_reports_orphaned_session_when_observer_is_gone() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        repo_root = Path.cwd()
+        _init_fake_git_repo(repo_root)
+        cortex_dir = repo_root / ".cortex"
+        (cortex_dir / "sessions").mkdir(parents=True, exist_ok=True)
+
+        lock_payload = {
+            "pid": 999999,
+            "observer_pid": 999999,
+            "started_at": "2026-04-21T21:21:57Z",
+            "repo_path": str(repo_root),
+            "log_path": str(cortex_dir / "sessions" / "stale.log"),
+        }
+        (cortex_dir / "session.lock").write_text(json.dumps(lock_payload), encoding="utf-8")
+
+        result = runner.invoke(main, ["start", "--no-bootstrap"])
+        assert result.exit_code == 0
+        assert "Previous session ended without 'cortex stop'" in result.output
+
+        stop_result = runner.invoke(main, ["stop"])
+        assert stop_result.exit_code == 0

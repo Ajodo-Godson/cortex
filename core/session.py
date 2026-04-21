@@ -50,17 +50,24 @@ class SessionManager:
         data = json.loads(self.lock_path.read_text(encoding="utf-8"))
         return SessionState(**data)
 
+    def is_session_active(self, session: SessionState | None = None) -> bool:
+        if session is None:
+            session = self.load_active_session()
+        if session is None:
+            return False
+        return self._pid_exists(session.observer_pid)
+
     def detect_orphaned_session(self) -> SessionState | None:
         session = self.load_active_session()
         if session is None:
             return None
-        if self._pid_exists(session.pid):
+        if self.is_session_active(session):
             return None
         return session
 
     def start_session(self, observer_pid: int) -> SessionState:
         active = self.load_active_session()
-        if active is not None and self._pid_exists(active.pid):
+        if self.is_session_active(active):
             raise RuntimeError("A CORTEX session is already active in this repo.")
 
         ensure_cortex_dirs(self.repo_root)

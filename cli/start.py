@@ -27,6 +27,10 @@ def start_command(dry_run: bool, verbose: bool, boost: str | None, no_bootstrap:
     if not session_manager.is_git_repo():
         raise click.ClickException("Current directory is not a git repository.")
 
+    active = session_manager.load_active_session()
+    if session_manager.is_session_active(active):
+        raise click.ClickException("A CORTEX session is already active in this repo.")
+
     orphan = session_manager.detect_orphaned_session()
     if orphan is not None:
         click.echo(
@@ -36,10 +40,6 @@ def start_command(dry_run: bool, verbose: bool, boost: str | None, no_bootstrap:
 
     first_run = not session_manager.cortex_dir.exists()
     ensure_cortex_dirs(repo_root)
-
-    active = session_manager.load_active_session()
-    if active is not None and orphan is None:
-        raise click.ClickException("A CORTEX session is already active in this repo.")
 
     if first_run and not no_bootstrap:
         should_bootstrap = click.confirm(
