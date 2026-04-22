@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import click
 
+from agents.distiller import Distiller
+from core.sample_data import sample_correction_event
 from core.session import SessionManager
+from core.storage import load_constraints
 
 
 @click.command("status")
@@ -33,8 +37,13 @@ def status_command() -> None:
 
 @click.command("constraints")
 def constraints_command() -> None:
-    """Stub constraints command."""
-    click.echo("Constraint listing is not implemented yet.")
+    """List stored constraints."""
+    constraints = load_constraints(Path.cwd())
+    if not constraints:
+        click.echo("No stored constraints found.")
+        return
+    for constraint in constraints:
+        click.echo(f"{constraint.constraint_id}  {constraint.context}  confidence={constraint.confidence:.2f}")
 
 
 @click.command("diff")
@@ -62,9 +71,28 @@ def bootstrap_command(since: str | None) -> None:
 
 
 @click.command("distill")
-def distill_command() -> None:
-    """Stub distill command."""
-    click.echo("Manual distillation is not implemented yet.")
+@click.option("--log", "log_path", type=click.Path(path_type=Path), default=None, help="Distill a specific session log.")
+@click.option("--sample", is_flag=True, help="Append a sample correction event before distilling.")
+def distill_command(log_path: Path | None, sample: bool) -> None:
+    """Manually trigger distillation."""
+    repo_root = Path.cwd()
+    session_manager = SessionManager(repo_root)
+    session = session_manager.load_active_session()
+
+    if log_path is None:
+        if session is None:
+            raise click.ClickException("No active session found. Pass --log to distill a specific session log.")
+        log_path = Path(session.log_path)
+
+    if sample:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(sample_correction_event()) + "\n")
+
+    result = Distiller(repo_root).run(log_path)
+    click.echo(f"Correction events detected: {result.correction_events}")
+    click.echo(f"New constraints added:      {result.new_constraints}")
+    click.echo(f"Constraints updated:       {result.updated_constraints}")
 
 
 @click.command("garden")

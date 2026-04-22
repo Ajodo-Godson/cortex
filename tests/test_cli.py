@@ -114,3 +114,19 @@ def test_status_reports_stale_session_lock() -> None:
         assert result.exit_code == 0
         assert "Stale session lock detected from:" in result.output
         assert "(not running)" in result.output
+
+
+def test_manual_distill_with_sample_writes_constraint_library(tmp_path: Path) -> None:
+    runner = CliRunner()
+    repo_root = tmp_path
+    _init_fake_git_repo(repo_root)
+    log_path = repo_root / ".cortex" / "sessions" / "manual.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("", encoding="utf-8")
+
+    result = runner.invoke(main, ["distill", "--log", str(log_path), "--sample"], catch_exceptions=False)
+
+    assert result.exit_code == 0
+    assert "Correction events detected: 1" in result.output
+    constraint_path = repo_root / ".cortex" / "constraints" / "db-transaction-payload-001.yaml"
+    assert constraint_path.exists()

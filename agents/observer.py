@@ -21,12 +21,11 @@ class ObserverManager:
     def __init__(self, repo_root: Path) -> None:
         self.repo_root = repo_root
 
-    def start(self) -> ObserverState:
-        log_dir = self.repo_root / ".cortex" / "sessions"
-        log_dir.mkdir(parents=True, exist_ok=True)
+    def start(self, log_path: Path) -> ObserverState:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
         worker_path = Path(__file__).with_name("observer_worker.py")
         process = subprocess.Popen(
-            [sys.executable, str(worker_path), str(log_dir)],
+            [sys.executable, str(worker_path), str(log_path)],
             cwd=self.repo_root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

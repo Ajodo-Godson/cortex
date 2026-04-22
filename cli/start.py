@@ -67,9 +67,10 @@ def start_command(dry_run: bool, verbose: bool, boost: str | None, no_bootstrap:
     cortex_md_path = repo_root / "CORTEX.md"
     cortex_md_path.write_text(cortex_markdown, encoding="utf-8")
 
+    log_path = session_manager.create_session_log()
     observer = ObserverManager(repo_root)
-    observer_state = observer.start()
-    session = session_manager.start_session(observer_pid=observer_state.pid)
+    observer_state = observer.start(log_path)
+    session = session_manager.start_session(observer_pid=observer_state.pid, log_path=log_path)
 
     click.echo(f"Repo:       {repo_root.name}")
     click.echo(f"Library:    initialized at {session_manager.cortex_dir}")

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import json
+import os
 import signal
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -21,11 +24,20 @@ def main() -> None:
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
-    log_dir = Path(sys.argv[1])
-    heartbeat = log_dir / "observer-heartbeat.log"
+    log_path = Path(sys.argv[1])
 
     while RUNNING:
-        heartbeat.write_text(f"observer alive {int(time.time())}\n", encoding="utf-8")
+        with log_path.open("a", encoding="utf-8") as handle:
+            handle.write(
+                json.dumps(
+                    {
+                        "type": "observer_heartbeat",
+                        "observed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "pid": os.getpid(),
+                    }
+                )
+                + "\n"
+            )
         time.sleep(1)
 
 

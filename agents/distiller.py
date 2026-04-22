@@ -85,6 +85,8 @@ class Distiller:
                 payload = json.loads(stripped)
             except json.JSONDecodeError:
                 continue
+            if payload.get("type") not in (None, "correction_event"):
+                continue
             constraints.append(self.distill_event(payload))
         return constraints
 

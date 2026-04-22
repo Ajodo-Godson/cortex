@@ -78,22 +78,20 @@ class SessionManager:
             cortex_md_path.unlink()
         self.end_session()
 
-    def start_session(self, observer_pid: int) -> SessionState:
+    def start_session(self, observer_pid: int, log_path: Path | None = None) -> SessionState:
         active = self.load_active_session()
         if self.is_session_active(active):
             raise RuntimeError("A CORTEX session is already active in this repo.")
 
         ensure_cortex_dirs(self.repo_root)
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        session_name = datetime.now(timezone.utc).strftime("%Y-%m-%d-%H%M%S")
-        log_path = self.cortex_dir / "sessions" / f"{session_name}.log"
-        log_path.write_text("session started\n", encoding="utf-8")
+        session_log = log_path or self.create_session_log(timestamp)
         session = SessionState(
             pid=os.getpid(),
             observer_pid=observer_pid,
             started_at=timestamp,
             repo_path=str(self.repo_root),
-            log_path=str(log_path),
+            log_path=str(session_log),
         )
         self.lock_path.write_text(json.dumps(asdict(session), indent=2), encoding="utf-8")
         return session
@@ -101,6 +99,18 @@ class SessionManager:
     def end_session(self) -> None:
         if self.lock_path.exists():
             self.lock_path.unlink()
+
+    def create_session_log(self, started_at: str | None = None) -> Path:
+        ensure_cortex_dirs(self.repo_root)
+        now = datetime.now(timezone.utc)
+        timestamp = started_at or now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        session_name = now.strftime("%Y-%m-%d-%H%M%S")
+        log_path = self.cortex_dir / "sessions" / f"{session_name}.log"
+        log_path.write_text(
+            json.dumps({"type": "session_start", "started_at": timestamp}) + "\n",
+            encoding="utf-8",
+        )
+        return log_path
 
     def _pid_exists(self, pid: int) -> bool:
         try:
