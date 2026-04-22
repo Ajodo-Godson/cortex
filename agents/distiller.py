@@ -8,6 +8,8 @@ from pathlib import Path
 
 from core.schema import Constraint
 from core.schema import CorrectionEvent
+from core.storage import constraint_path
+from core.storage import save_constraint
 
 
 @dataclass
@@ -52,12 +54,22 @@ class Distiller:
         log_path = Path(log_path)
         archive_path = self.repo_root / ".cortex" / "archive" / f"{log_path.stem}.distilled"
         constraints = self._distill_log_file(log_path)
+        new_constraints = 0
+        updated_constraints = 0
+        for constraint in constraints:
+            existing_path = constraint_path(self.repo_root, constraint.constraint_id)
+            existed = existing_path.exists()
+            save_constraint(self.repo_root, constraint)
+            if existed:
+                updated_constraints += 1
+            else:
+                new_constraints += 1
         rendered = [constraint.model_dump(mode="json") for constraint in constraints]
         archive_path.write_text(json.dumps(rendered, indent=2), encoding="utf-8")
         return DistillResult(
             correction_events=len(constraints),
-            new_constraints=len(constraints),
-            updated_constraints=0,
+            new_constraints=new_constraints,
+            updated_constraints=updated_constraints,
         )
 
     def _distill_log_file(self, log_path: Path) -> list[Constraint]:

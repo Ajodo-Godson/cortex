@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 
 from agents.distiller import Distiller
+from agents.retriever import Retriever
 from core.schema import Constraint
+from core.storage import load_constraints
 
 
 FIXTURES = [
@@ -269,3 +271,26 @@ def test_distiller_run_distills_json_log_lines_into_archive_output(tmp_path: Pat
     rendered = archive_path.read_text(encoding="utf-8")
     assert "db-transaction-payload-001" in rendered
     assert "auth-token-refresh-003" in rendered
+    constraints = load_constraints(repo_root)
+    assert len(constraints) == 2
+    assert constraints[0].constraint_id == "auth-token-refresh-003"
+    assert constraints[1].constraint_id == "db-transaction-payload-001"
+
+
+def test_retriever_prefers_stored_constraints_over_scaffold_placeholders(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    archive_dir = repo_root / ".cortex" / "archive"
+    archive_dir.mkdir(parents=True)
+    log_path = repo_root / ".cortex" / "sessions.log"
+    log_path.write_text(
+        "\n".join([json.dumps(FIXTURES[0]), json.dumps(FIXTURES[1])]),
+        encoding="utf-8",
+    )
+
+    Distiller(repo_root).run(log_path)
+    result = Retriever(repo_root).retrieve()
+
+    assert len(result.constraints) == 2
+    assert result.constraints[0].constraint_id == "auth-token-refresh-003"
+    assert result.constraints[1].constraint_id == "db-transaction-payload-001"
+    assert result.constraints[0].title == FIXTURES[1]["context"]
