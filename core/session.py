@@ -65,6 +65,19 @@ class SessionManager:
             return None
         return session
 
+    def clear_stale_session(self, session: SessionState | None = None) -> None:
+        if session is None:
+            session = self.load_active_session()
+        if session is None:
+            return
+        if self.is_session_active(session):
+            raise RuntimeError("Cannot clear an active CORTEX session.")
+
+        cortex_md_path = self.repo_root / "CORTEX.md"
+        if cortex_md_path.exists():
+            cortex_md_path.unlink()
+        self.end_session()
+
     def start_session(self, observer_pid: int) -> SessionState:
         active = self.load_active_session()
         if self.is_session_active(active):

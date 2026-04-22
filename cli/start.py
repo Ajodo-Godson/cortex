@@ -37,6 +37,7 @@ def start_command(dry_run: bool, verbose: bool, boost: str | None, no_bootstrap:
             f"Previous session ended without 'cortex stop' ({orphan.started_at}). "
             "Run 'cortex distill' after review if you want to recover it."
         )
+        session_manager.clear_stale_session(orphan)
 
     first_run = not session_manager.cortex_dir.exists()
     ensure_cortex_dirs(repo_root)

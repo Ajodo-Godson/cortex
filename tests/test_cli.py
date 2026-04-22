@@ -87,6 +87,30 @@ def test_start_reports_orphaned_session_when_observer_is_gone() -> None:
         result = runner.invoke(main, ["start", "--no-bootstrap"])
         assert result.exit_code == 0
         assert "Previous session ended without 'cortex stop'" in result.output
+        assert (cortex_dir / "session.lock").exists()
 
         stop_result = runner.invoke(main, ["stop"])
         assert stop_result.exit_code == 0
+
+
+def test_status_reports_stale_session_lock() -> None:
+    runner = CliRunner()
+    with runner.isolated_filesystem():
+        repo_root = Path.cwd()
+        _init_fake_git_repo(repo_root)
+        cortex_dir = repo_root / ".cortex"
+        (cortex_dir / "sessions").mkdir(parents=True, exist_ok=True)
+
+        lock_payload = {
+            "pid": 999999,
+            "observer_pid": 999999,
+            "started_at": "2026-04-21T21:21:57Z",
+            "repo_path": str(repo_root),
+            "log_path": str(cortex_dir / "sessions" / "stale.log"),
+        }
+        (cortex_dir / "session.lock").write_text(json.dumps(lock_payload), encoding="utf-8")
+
+        result = runner.invoke(main, ["status"])
+        assert result.exit_code == 0
+        assert "Stale session lock detected from:" in result.output
+        assert "(not running)" in result.output

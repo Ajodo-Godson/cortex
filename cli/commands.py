@@ -19,6 +19,13 @@ def status_command() -> None:
         click.echo("CORTEX is not running in this repo.")
         return
 
+    if not session_manager.is_session_active(session):
+        click.echo(f"Stale session lock detected from: {session.started_at}")
+        click.echo(f"Observer PID:               {session.observer_pid} (not running)")
+        click.echo(f"Session log:                {session.log_path}")
+        click.echo("Run 'cortex start' to recover automatically or 'cortex distill' after review.")
+        return
+
     click.echo(f"Active session since: {session.started_at}")
     click.echo(f"Observer PID:         {session.observer_pid}")
     click.echo(f"Session log:          {session.log_path}")
