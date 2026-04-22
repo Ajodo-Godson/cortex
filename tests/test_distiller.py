@@ -294,3 +294,31 @@ def test_retriever_prefers_stored_constraints_over_scaffold_placeholders(tmp_pat
     assert result.constraints[0].constraint_id == "auth-token-refresh-003"
     assert result.constraints[1].constraint_id == "db-transaction-payload-001"
     assert result.constraints[0].title == FIXTURES[1]["context"]
+
+
+def test_retriever_ranks_constraints_by_branch_and_boost_context(tmp_path: Path) -> None:
+    repo_root = tmp_path
+    (repo_root / ".git").mkdir()
+    (repo_root / ".git" / "HEAD").write_text("ref: refs/heads/feat/payments-auth\n", encoding="utf-8")
+    archive_dir = repo_root / ".cortex" / "archive"
+    archive_dir.mkdir(parents=True)
+    log_path = repo_root / ".cortex" / "sessions.log"
+    log_path.write_text(
+        "\n".join(
+            [
+                json.dumps(FIXTURES[0]),
+                json.dumps(FIXTURES[1]),
+                json.dumps(FIXTURES[7]),
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    Distiller(repo_root).run(log_path)
+    result = Retriever(repo_root).retrieve(boost="auth", verbose=True)
+
+    assert result.constraints[0].constraint_id == "auth-token-refresh-003"
+    assert result.constraints[1].constraint_id == "db-transaction-payload-001"
+    assert result.constraints[0].reasons is not None
+    assert any("boost match" in reason for reason in result.constraints[0].reasons)
+    assert any("branch match" in reason for reason in result.constraints[0].reasons)
