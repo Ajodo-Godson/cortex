@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from click.testing import CliRunner
 
+from agents.observer_worker import drain_event_inbox
 from cli.main import main
+from core.storage import read_session_records
 
 
 def _init_fake_git_repo(repo_root: Path) -> None:
@@ -174,3 +177,36 @@ def test_record_sample_then_distill_uses_validated_event_path(tmp_path: Path) ->
     assert "Correction events detected: 1" in distill_result.output
     constraint_path = repo_root / ".cortex" / "constraints" / "db-transaction-payload-001.yaml"
     assert constraint_path.exists()
+
+
+def test_record_queue_then_observer_drain_writes_correction_event_to_session_log(tmp_path: Path) -> None:
+    runner = CliRunner()
+    repo_root = tmp_path
+    _init_fake_git_repo(repo_root)
+    previous_cwd = Path.cwd()
+    os.chdir(repo_root)
+    try:
+        record_result = runner.invoke(main, ["record", "--sample", "--queue"], catch_exceptions=False)
+        assert record_result.exit_code != 0
+
+        start_result = runner.invoke(main, ["start", "--no-bootstrap"], catch_exceptions=False)
+        assert start_result.exit_code == 0
+
+        queue_result = runner.invoke(main, ["record", "--sample", "--queue"], catch_exceptions=False)
+        assert queue_result.exit_code == 0
+        assert "Queued correction event:" in queue_result.output
+
+        session_logs = sorted((repo_root / ".cortex" / "sessions").glob("*.log"))
+        assert session_logs
+
+        drained = drain_event_inbox(session_logs[-1], repo_root)
+        assert drained == 1
+
+        records = read_session_records(session_logs[-1], record_type="correction_event")
+        assert len(records) == 1
+        assert records[0]["event_id"] == "evt-sample-001"
+
+        stop_result = runner.invoke(main, ["stop"], catch_exceptions=False)
+        assert stop_result.exit_code == 0
+    finally:
+        os.chdir(previous_cwd)

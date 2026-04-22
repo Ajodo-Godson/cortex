@@ -25,7 +25,7 @@ class ObserverManager:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         worker_path = Path(__file__).with_name("observer_worker.py")
         process = subprocess.Popen(
-            [sys.executable, str(worker_path), str(log_path)],
+            [sys.executable, str(worker_path), str(log_path), str(self.repo_root)],
             cwd=self.repo_root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

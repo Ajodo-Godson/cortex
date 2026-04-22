@@ -13,13 +13,17 @@ from core.schema import Constraint
 
 def ensure_cortex_dirs(repo_root: Path) -> Path:
     cortex_dir = repo_root / ".cortex"
-    for relative in ("constraints", "sessions", "archive", "patterns"):
+    for relative in ("constraints", "sessions", "archive", "patterns", "inbox"):
         (cortex_dir / relative).mkdir(parents=True, exist_ok=True)
     return cortex_dir
 
 
 def constraints_dir(repo_root: Path) -> Path:
     return ensure_cortex_dirs(repo_root) / "constraints"
+
+
+def inbox_dir(repo_root: Path) -> Path:
+    return ensure_cortex_dirs(repo_root) / "inbox"
 
 
 def constraint_path(repo_root: Path, constraint_id: str) -> Path:

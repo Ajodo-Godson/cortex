@@ -10,6 +10,7 @@ import yaml
 
 from agents.distiller import Distiller
 from core.events import append_correction_event
+from core.events import queue_correction_event
 from core.sample_data import sample_correction_event
 from core.session import SessionManager
 from core.storage import load_constraint
@@ -117,13 +118,17 @@ def distill_command(log_path: Path | None, sample: bool) -> None:
 @click.option("--log", "log_path", type=click.Path(path_type=Path), default=None, help="Write to a specific session log.")
 @click.option("--sample", is_flag=True, help="Append a sample correction event.")
 @click.option("--event-file", type=click.Path(exists=True, path_type=Path), default=None, help="Append a correction event from a JSON file.")
-def record_command(log_path: Path | None, sample: bool, event_file: Path | None) -> None:
+@click.option("--queue", "queue_for_observer", is_flag=True, help="Queue the event for observer ingestion instead of writing directly to the log.")
+def record_command(log_path: Path | None, sample: bool, event_file: Path | None, queue_for_observer: bool) -> None:
     """Append a validated correction event to a session log without distilling it."""
     repo_root = Path.cwd()
     session_manager = SessionManager(repo_root)
     session = session_manager.load_active_session()
 
-    if log_path is None:
+    if queue_for_observer:
+        if session is None:
+            raise click.ClickException("No active session found. Start a session before queueing an observer event.")
+    elif log_path is None:
         if session is None:
             raise click.ClickException("No active session found. Pass --log to write to a specific session log.")
         log_path = Path(session.log_path)
@@ -131,10 +136,19 @@ def record_command(log_path: Path | None, sample: bool, event_file: Path | None)
     if sample == bool(event_file):
         raise click.ClickException("Choose exactly one of --sample or --event-file.")
 
+    event_payload = sample_correction_event() if sample else json.loads(event_file.read_text(encoding="utf-8"))
+
+    if queue_for_observer:
+        queued_path = queue_correction_event(repo_root, event_payload)
+        event_id = queued_path.stem
+        click.echo(f"Queued correction event:    {event_id}")
+        click.echo(f"Inbox file:                 {queued_path}")
+        return
+
     if sample:
-        payload = append_correction_event(log_path, sample_correction_event())
+        payload = append_correction_event(log_path, event_payload)
     else:
-        payload = append_correction_event(log_path, json.loads(event_file.read_text(encoding="utf-8")))
+        payload = append_correction_event(log_path, event_payload)
 
     click.echo(f"Recorded correction event:  {payload['event_id']}")
     click.echo(f"Constraint candidate:       {payload['constraint_key']}-{int(payload['sequence']):03d}")
