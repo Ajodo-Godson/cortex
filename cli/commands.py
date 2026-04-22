@@ -9,9 +9,9 @@ import click
 import yaml
 
 from agents.distiller import Distiller
+from core.events import append_correction_event
 from core.sample_data import sample_correction_event
 from core.session import SessionManager
-from core.storage import append_session_record
 from core.storage import load_constraint
 from core.storage import load_constraints
 
@@ -105,12 +105,40 @@ def distill_command(log_path: Path | None, sample: bool) -> None:
         log_path = Path(session.log_path)
 
     if sample:
-        append_session_record(log_path, sample_correction_event())
+        append_correction_event(log_path, sample_correction_event())
 
     result = Distiller(repo_root).run(log_path)
     click.echo(f"Correction events detected: {result.correction_events}")
     click.echo(f"New constraints added:      {result.new_constraints}")
     click.echo(f"Constraints updated:       {result.updated_constraints}")
+
+
+@click.command("record")
+@click.option("--log", "log_path", type=click.Path(path_type=Path), default=None, help="Write to a specific session log.")
+@click.option("--sample", is_flag=True, help="Append a sample correction event.")
+@click.option("--event-file", type=click.Path(exists=True, path_type=Path), default=None, help="Append a correction event from a JSON file.")
+def record_command(log_path: Path | None, sample: bool, event_file: Path | None) -> None:
+    """Append a validated correction event to a session log without distilling it."""
+    repo_root = Path.cwd()
+    session_manager = SessionManager(repo_root)
+    session = session_manager.load_active_session()
+
+    if log_path is None:
+        if session is None:
+            raise click.ClickException("No active session found. Pass --log to write to a specific session log.")
+        log_path = Path(session.log_path)
+
+    if sample == bool(event_file):
+        raise click.ClickException("Choose exactly one of --sample or --event-file.")
+
+    if sample:
+        payload = append_correction_event(log_path, sample_correction_event())
+    else:
+        payload = append_correction_event(log_path, json.loads(event_file.read_text(encoding="utf-8")))
+
+    click.echo(f"Recorded correction event:  {payload['event_id']}")
+    click.echo(f"Constraint candidate:       {payload['constraint_key']}-{int(payload['sequence']):03d}")
+    click.echo(f"Session log:                {log_path}")
 
 
 @click.command("garden")

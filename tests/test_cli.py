@@ -155,3 +155,22 @@ def test_constraints_filter_and_show_use_stored_library(tmp_path: Path) -> None:
     assert show_result.exit_code == 0
     assert "meta_type: operational_constraint" in show_result.output
     assert "context: PostgreSQL transaction handling above 10MB payload" in show_result.output
+
+
+def test_record_sample_then_distill_uses_validated_event_path(tmp_path: Path) -> None:
+    runner = CliRunner()
+    repo_root = tmp_path
+    _init_fake_git_repo(repo_root)
+    log_path = repo_root / ".cortex" / "sessions" / "manual.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("", encoding="utf-8")
+
+    record_result = runner.invoke(main, ["record", "--log", str(log_path), "--sample"], catch_exceptions=False)
+    assert record_result.exit_code == 0
+    assert "Recorded correction event:" in record_result.output
+
+    distill_result = runner.invoke(main, ["distill", "--log", str(log_path)], catch_exceptions=False)
+    assert distill_result.exit_code == 0
+    assert "Correction events detected: 1" in distill_result.output
+    constraint_path = repo_root / ".cortex" / "constraints" / "db-transaction-payload-001.yaml"
+    assert constraint_path.exists()
