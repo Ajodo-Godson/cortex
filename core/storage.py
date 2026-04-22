@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -46,3 +48,28 @@ def load_constraints(repo_root: Path) -> list[Constraint]:
     for path in sorted(directory.glob("*.yaml")):
         loaded.append(load_constraint(path))
     return loaded
+
+
+def append_session_record(log_path: Path, payload: dict[str, Any]) -> None:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload) + "\n")
+
+
+def read_session_records(log_path: Path, record_type: str | None = None) -> list[dict[str, Any]]:
+    if not log_path.exists():
+        return []
+
+    records: list[dict[str, Any]] = []
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            payload = json.loads(stripped)
+        except json.JSONDecodeError:
+            continue
+        if record_type is not None and payload.get("type") != record_type:
+            continue
+        records.append(payload)
+    return records

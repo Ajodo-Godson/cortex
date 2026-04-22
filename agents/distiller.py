@@ -8,6 +8,7 @@ from pathlib import Path
 
 from core.schema import Constraint
 from core.schema import CorrectionEvent
+from core.storage import read_session_records
 from core.storage import constraint_path
 from core.storage import save_constraint
 
@@ -74,17 +75,7 @@ class Distiller:
 
     def _distill_log_file(self, log_path: Path) -> list[Constraint]:
         constraints: list[Constraint] = []
-        if not log_path.exists():
-            return constraints
-
-        for line in log_path.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                payload = json.loads(stripped)
-            except json.JSONDecodeError:
-                continue
+        for payload in read_session_records(log_path):
             if payload.get("type") not in (None, "correction_event"):
                 continue
             constraints.append(self.distill_event(payload))

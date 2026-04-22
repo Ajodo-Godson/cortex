@@ -10,6 +10,8 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+from core.storage import append_session_record
+
 
 RUNNING = True
 
@@ -27,17 +29,14 @@ def main() -> None:
     log_path = Path(sys.argv[1])
 
     while RUNNING:
-        with log_path.open("a", encoding="utf-8") as handle:
-            handle.write(
-                json.dumps(
-                    {
-                        "type": "observer_heartbeat",
-                        "observed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "pid": os.getpid(),
-                    }
-                )
-                + "\n"
-            )
+        append_session_record(
+            log_path,
+            {
+                "type": "observer_heartbeat",
+                "observed_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "pid": os.getpid(),
+            },
+        )
         time.sleep(1)
 
 

@@ -6,10 +6,13 @@ import json
 from pathlib import Path
 
 import click
+import yaml
 
 from agents.distiller import Distiller
 from core.sample_data import sample_correction_event
 from core.session import SessionManager
+from core.storage import append_session_record
+from core.storage import load_constraint
 from core.storage import load_constraints
 
 
@@ -36,11 +39,24 @@ def status_command() -> None:
 
 
 @click.command("constraints")
-def constraints_command() -> None:
+@click.option("--filter", "filter_text", type=str, default=None, help="Filter constraints by id, context, or service.")
+def constraints_command(filter_text: str | None) -> None:
     """List stored constraints."""
     constraints = load_constraints(Path.cwd())
     if not constraints:
         click.echo("No stored constraints found.")
+        return
+    if filter_text:
+        needle = filter_text.lower()
+        constraints = [
+            constraint
+            for constraint in constraints
+            if needle in constraint.constraint_id.lower()
+            or needle in constraint.context.lower()
+            or any(needle in service.lower() for service in constraint.scope.services)
+        ]
+    if not constraints:
+        click.echo("No constraints matched that filter.")
         return
     for constraint in constraints:
         click.echo(f"{constraint.constraint_id}  {constraint.context}  confidence={constraint.confidence:.2f}")
@@ -55,11 +71,15 @@ def diff_command() -> None:
 @click.command("show")
 @click.argument("constraint_id", required=False)
 def show_command(constraint_id: str | None) -> None:
-    """Stub show command."""
+    """Show one stored constraint."""
     if constraint_id is None:
         click.echo("Provide a constraint id.")
         return
-    click.echo(f"Constraint detail is not implemented yet for: {constraint_id}")
+    path = Path.cwd() / ".cortex" / "constraints" / f"{constraint_id}.yaml"
+    if not path.exists():
+        raise click.ClickException(f"Constraint not found: {constraint_id}")
+    constraint = load_constraint(path)
+    click.echo(yaml.safe_dump(constraint.model_dump(mode="json"), sort_keys=False, allow_unicode=False))
 
 
 @click.command("bootstrap")
@@ -85,9 +105,7 @@ def distill_command(log_path: Path | None, sample: bool) -> None:
         log_path = Path(session.log_path)
 
     if sample:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        with log_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(sample_correction_event()) + "\n")
+        append_session_record(log_path, sample_correction_event())
 
     result = Distiller(repo_root).run(log_path)
     click.echo(f"Correction events detected: {result.correction_events}")
