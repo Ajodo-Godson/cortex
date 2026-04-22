@@ -11,7 +11,9 @@ import yaml
 from agents.distiller import Distiller
 from core.events import append_correction_event
 from core.events import queue_correction_event
+from core.events import queue_signal
 from core.sample_data import sample_correction_event
+from core.sample_data import sample_correction_signal
 from core.session import SessionManager
 from core.storage import load_constraint
 from core.storage import load_constraints
@@ -153,6 +155,22 @@ def record_command(log_path: Path | None, sample: bool, event_file: Path | None,
     click.echo(f"Recorded correction event:  {payload['event_id']}")
     click.echo(f"Constraint candidate:       {payload['constraint_key']}-{int(payload['sequence']):03d}")
     click.echo(f"Session log:                {log_path}")
+
+
+@click.command("signal")
+@click.option("--sample", "sample_kind", type=click.Choice(["deadlock", "token_refresh", "webhook_signature"]), required=True, help="Queue a sample observer signal.")
+def signal_command(sample_kind: str) -> None:
+    """Queue a simple observer signal for worker-side classification."""
+    repo_root = Path.cwd()
+    session_manager = SessionManager(repo_root)
+    session = session_manager.load_active_session()
+    if session is None or not session_manager.is_session_active(session):
+        raise click.ClickException("No active session found. Start a session before queueing an observer signal.")
+
+    queued_path = queue_signal(repo_root, sample_correction_signal(sample_kind))
+    click.echo(f"Queued observer signal:     {queued_path.stem}")
+    click.echo(f"Signal kind:                {sample_kind}")
+    click.echo(f"Inbox file:                 {queued_path}")
 
 
 @click.command("garden")

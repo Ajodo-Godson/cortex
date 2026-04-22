@@ -8,6 +8,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
+from agents.observer_worker import classify_signal
 from agents.observer_worker import drain_event_inbox
 from cli.main import main
 from core.storage import read_session_records
@@ -210,3 +211,50 @@ def test_record_queue_then_observer_drain_writes_correction_event_to_session_log
         assert stop_result.exit_code == 0
     finally:
         os.chdir(previous_cwd)
+
+
+def test_signal_queue_then_observer_drain_classifies_into_correction_event(tmp_path: Path) -> None:
+    runner = CliRunner()
+    repo_root = tmp_path
+    _init_fake_git_repo(repo_root)
+    previous_cwd = Path.cwd()
+    os.chdir(repo_root)
+    try:
+        start_result = runner.invoke(main, ["start", "--no-bootstrap"], catch_exceptions=False)
+        assert start_result.exit_code == 0
+
+        signal_result = runner.invoke(main, ["signal", "--sample", "token_refresh"], catch_exceptions=False)
+        assert signal_result.exit_code == 0
+        assert "Queued observer signal:" in signal_result.output
+
+        session_logs = sorted((repo_root / ".cortex" / "sessions").glob("*.log"))
+        assert session_logs
+        drained = drain_event_inbox(session_logs[-1], repo_root)
+        assert drained == 1
+
+        records = read_session_records(session_logs[-1], record_type="correction_event")
+        assert len(records) == 1
+        assert records[0]["constraint_key"] == "auth-token-refresh"
+
+        stop_result = runner.invoke(main, ["stop"], catch_exceptions=False)
+        assert stop_result.exit_code == 0
+    finally:
+        os.chdir(previous_cwd)
+
+
+def test_classify_signal_maps_supported_kinds_to_valid_correction_events() -> None:
+    payload = {
+        "type": "correction_signal",
+        "signal_id": "sig-001",
+        "kind": "webhook_signature",
+        "language": "python",
+        "services": ["webhooks-gateway"],
+        "human_fix": "Verify the raw body signature before JSON parsing.",
+        "evidence": [{"type": "agent_correction", "commit_hash": "feedbee", "corrected_by": "human", "date": "2025-03-22"}],
+    }
+
+    normalized = classify_signal(payload)
+
+    assert normalized["type"] == "correction_event"
+    assert normalized["constraint_key"] == "webhook-signature-order"
+    assert normalized["scope"]["services"] == ["webhooks-gateway"]

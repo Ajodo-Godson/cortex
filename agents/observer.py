@@ -24,11 +24,20 @@ class ObserverManager:
     def start(self, log_path: Path) -> ObserverState:
         log_path.parent.mkdir(parents=True, exist_ok=True)
         worker_path = Path(__file__).with_name("observer_worker.py")
+        project_root = Path(__file__).resolve().parent.parent
+        env = os.environ.copy()
+        existing_pythonpath = env.get("PYTHONPATH")
+        env["PYTHONPATH"] = (
+            f"{project_root}{os.pathsep}{existing_pythonpath}"
+            if existing_pythonpath
+            else str(project_root)
+        )
         process = subprocess.Popen(
             [sys.executable, str(worker_path), str(log_path), str(self.repo_root)],
             cwd=self.repo_root,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
+            env=env,
         )
         return ObserverState(pid=process.pid)
 

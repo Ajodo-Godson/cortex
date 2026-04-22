@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from core.schema import CorrectionEvent
 from core.storage import inbox_dir
@@ -29,5 +30,13 @@ def queue_correction_event(repo_root: Path, event: CorrectionEvent | dict[str, o
     """Queue a validated correction event for the observer to ingest."""
     payload = normalize_correction_event(event)
     path = inbox_dir(repo_root) / f"{payload['event_id']}.json"
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return path
+
+
+def queue_signal(repo_root: Path, payload: dict[str, Any]) -> Path:
+    """Queue a raw observer signal for worker-side normalization."""
+    signal_id = str(payload.get("signal_id", "signal"))
+    path = inbox_dir(repo_root) / f"{signal_id}.json"
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return path

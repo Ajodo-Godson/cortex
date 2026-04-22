@@ -10,6 +10,7 @@ from cli.commands import diff_command
 from cli.commands import distill_command
 from cli.commands import garden_command
 from cli.commands import record_command
+from cli.commands import signal_command
 from cli.commands import show_command
 from cli.commands import status_command
 from cli.commands import view_command
@@ -31,6 +32,7 @@ main.add_command(show_command, name="show")
 main.add_command(bootstrap_command, name="bootstrap")
 main.add_command(distill_command, name="distill")
 main.add_command(record_command, name="record")
+main.add_command(signal_command, name="signal")
 main.add_command(garden_command, name="garden")
 main.add_command(view_command, name="view")
 
