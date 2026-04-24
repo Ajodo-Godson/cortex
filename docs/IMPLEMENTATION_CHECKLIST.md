@@ -18,74 +18,74 @@ This checklist translates `docs/CORTEX_README_v3.md` into an execution-oriented 
 
 ### Package and repo setup
 
-- [ ] Create Python package layout for `cli/`, `core/`, `agents/`, `retrieval/`, `gardener/`, `viewer/`, `tests/`, and `templates/`
-- [ ] Add packaging and dependency metadata
-- [ ] Add a `cortex` CLI entry point
+- [x] Create Python package layout for `cli/`, `core/`, `agents/`, `retrieval/`, `gardener/`, `viewer/`, `tests/`, and `templates/`
+- [x] Add packaging and dependency metadata
+- [x] Add a `cortex` CLI entry point
 - [ ] Add a starter `README.md` in the project root if needed
 
 ### Session state
 
-- [ ] Define `.cortex/session.lock` JSON schema with PID, start time, repo path, and session log path
-- [ ] Implement session lock read/write helpers
-- [ ] Implement active-session detection
-- [ ] Implement orphan-session detection
-- [ ] Handle missing or corrupt session lock files gracefully
+- [x] Define `.cortex/session.lock` JSON schema with PID, start time, repo path, and session log path
+- [x] Implement session lock read/write helpers
+- [x] Implement active-session detection
+- [x] Implement orphan-session detection
+- [x] Handle missing or corrupt session lock files gracefully
 
 ### `cortex start`
 
-- [ ] Detect whether the current directory is a git repo
-- [ ] Detect whether `.cortex/` exists
-- [ ] On first run, prompt for bootstrap unless `--no-bootstrap` is set
-- [ ] On orphaned prior session, offer recovery/distillation
-- [ ] Support `--dry-run`
-- [ ] Support `--verbose`
-- [ ] Support `--boost <domain>`
-- [ ] Write `CORTEX.md` from a template unless in dry-run mode
-- [ ] Start an Observer placeholder/background process
-- [ ] Persist session state to `.cortex/session.lock`
-- [ ] Print a clear readiness summary
+- [x] Detect whether the current directory is a git repo
+- [x] Detect whether `.cortex/` exists
+- [x] On first run, prompt for bootstrap unless `--no-bootstrap` is set
+- [x] On orphaned prior session, offer recovery/distillation
+- [x] Support `--dry-run`
+- [x] Support `--verbose`
+- [x] Support `--boost <domain>`
+- [x] Write `CORTEX.md` from a template unless in dry-run mode
+- [x] Start an Observer placeholder/background process
+- [x] Persist session state to `.cortex/session.lock`
+- [x] Print a clear readiness summary
 
 ### `cortex stop`
 
-- [ ] Detect and handle no-active-session case without crashing
-- [ ] Stop the Observer using PID from the lock file
-- [ ] Trigger Distiller placeholder on the session log
-- [ ] Remove `CORTEX.md`
-- [ ] Remove or archive session lock cleanly
-- [ ] Warn clearly if distillation fails
+- [x] Detect and handle no-active-session case without crashing
+- [x] Stop the Observer using PID from the lock file
+- [x] Trigger Distiller placeholder on the session log
+- [x] Remove `CORTEX.md`
+- [x] Remove or archive session lock cleanly
+- [x] Warn clearly if distillation fails
 
 ### Supporting CLI commands
 
-- [ ] Implement `cortex status`
-- [ ] Stub `constraints`, `diff`, `show`, `bootstrap`, `distill`, `garden`, and `view`
-- [ ] Keep output human-readable and stable enough for tests
+- [x] Implement `cortex status`
+- [x] Stub `constraints`, `diff`, `show`, `bootstrap`, `distill`, `garden`, and `view`
+- [x] Keep output human-readable and stable enough for tests
 
 ## P1a: Schema and Distiller
 
-- [ ] Build `tests/test_distiller.py` first with 10 ground-truth correction events
-- [ ] Define the canonical constraint schema
-- [ ] Implement schema validation
-- [ ] Implement Distiller input contract
-- [ ] Implement Distiller output validation
-- [ ] Ensure Distiller produces operational constraints, not summaries
-- [ ] Verify that injected output would have prevented the original correction
+- [x] Build `tests/test_distiller.py` first with 10 ground-truth correction events
+- [x] Define the canonical constraint schema
+- [x] Implement schema validation
+- [x] Implement Distiller input contract
+- [x] Implement Distiller output validation
+- [x] Ensure Distiller produces operational constraints, not summaries
+- [x] Verify that injected output would have prevented the original correction
 
 ## P1b: Observer and Hook
 
-- [ ] Implement Observer lifecycle management
-- [ ] Capture session log output to `.cortex/sessions/`
-- [ ] Integrate local classifier via Ollama/Qwen placeholder
-- [ ] Apply `0.7` confidence threshold
-- [ ] Log low-confidence events without promoting them
-- [ ] Add post-commit or equivalent correction-event hook path
+- [x] Implement Observer lifecycle management
+- [x] Capture session log output to `.cortex/sessions/`
+- [x] Integrate local classifier via Ollama/Qwen placeholder
+- [x] Apply `0.7` confidence threshold
+- [x] Log low-confidence events without promoting them
+- [x] Add post-commit or equivalent correction-event hook path
 
 ## P1c: Bootstrapper
 
-- [ ] Use PyGit2, not GitPython
-- [ ] Detect revert/fix commit sequences
-- [ ] Seed inferred constraints from git history
-- [ ] Support `cortex bootstrap --since <range>`
-- [ ] Run mining in parallel batches
+- [x] Use PyGit2, not GitPython
+- [x] Detect revert/fix commit sequences
+- [x] Seed inferred constraints from git history
+- [x] Support `cortex bootstrap --since <range>`
+- [x] Run mining in parallel batches
 
 ## P1d: Retrieval Stack
 
