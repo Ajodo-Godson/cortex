@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -48,19 +49,11 @@ class Bootstrapper:
         events = self._mine_commits(repo, cutoff)
 
         added = 0
-        for event_dict in events:
-            try:
-                constraint = self.distiller.distill_event(event_dict)
-                constraint = constraint.model_copy(
-                    update={
-                        "confidence": min(constraint.confidence, 0.70),
-                        "source": "inferred",
-                    }
-                )
-                save_constraint(self.repo_root, constraint)
-                added += 1
-            except Exception:
-                continue
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {executor.submit(self._distill_and_save, event): event for event in events}
+            for future in as_completed(futures):
+                if future.result():
+                    added += 1
 
         self._write_marker(
             f"Bootstrapped {added} constraints from git history (last {since_days} days).\n"
@@ -68,6 +61,20 @@ class Bootstrapper:
             f"Run 'cortex constraints' to review."
         )
         return added
+
+    def _distill_and_save(self, event_dict: dict[str, object]) -> bool:
+        try:
+            constraint = self.distiller.distill_event(event_dict)
+            constraint = constraint.model_copy(
+                update={
+                    "confidence": min(constraint.confidence, 0.70),
+                    "source": "inferred",
+                }
+            )
+            save_constraint(self.repo_root, constraint)
+            return True
+        except Exception:
+            return False
 
     # ── Commit mining ──────────────────────────────────────────────────────────
 
