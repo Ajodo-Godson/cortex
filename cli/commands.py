@@ -104,7 +104,12 @@ def bootstrap_command(since_days: int) -> None:
 @click.option("--sample", is_flag=True, help="Append a sample correction event before distilling.")
 def distill_command(log_path: Path | None, sample: bool) -> None:
     """Manually trigger distillation."""
-    repo_root = Path.cwd()
+    if log_path is not None:
+        # Derive repo_root from the log path: <repo_root>/.cortex/sessions/<name>.log
+        repo_root = log_path.resolve().parent.parent.parent
+    else:
+        repo_root = Path.cwd()
+
     session_manager = SessionManager(repo_root)
     session = session_manager.load_active_session()
 
