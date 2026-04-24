@@ -154,7 +154,7 @@ This checklist translates `docs/CORTEX_README_v3.md` into an execution-oriented 
 
 ## Initial Deliverables
 
-- [ ] Runnable local `cortex start`, `stop`, and `status`
-- [ ] Basic test coverage for session lifecycle
-- [ ] Generated `CORTEX.md` template path
-- [ ] Placeholder integration seams for Observer, Distiller, Bootstrapper, and Retriever
+- [x] Runnable local `cortex start`, `stop`, and `status`
+- [x] Basic test coverage for session lifecycle
+- [x] Generated `CORTEX.md` template path
+- [x] Placeholder integration seams for Observer, Distiller, Bootstrapper, and Retriever
