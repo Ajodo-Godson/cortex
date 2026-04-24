@@ -8,6 +8,7 @@ from pathlib import Path
 import click
 import yaml
 
+from agents.bootstrapper import Bootstrapper
 from agents.distiller import Distiller
 from core.events import append_correction_event
 from core.events import queue_correction_event
@@ -86,11 +87,16 @@ def show_command(constraint_id: str | None) -> None:
 
 
 @click.command("bootstrap")
-@click.option("--since", type=str, default=None, help="Limit bootstrap history.")
-def bootstrap_command(since: str | None) -> None:
-    """Stub bootstrap command."""
-    scope = since if since else "full history"
-    click.echo(f"Bootstrap is not implemented yet. Requested scope: {scope}")
+@click.option("--since", "since_days", type=int, default=90, show_default=True, help="Number of days of git history to mine.")
+def bootstrap_command(since_days: int) -> None:
+    """Mine git history and seed the constraint library."""
+    repo_root = Path.cwd()
+    click.echo(f"Bootstrapping from last {since_days} days of git history...")
+    added = Bootstrapper(repo_root).run_initial_bootstrap(since_days=since_days)
+    if added:
+        click.echo(f"Done. {added} constraint(s) added to the library.")
+    else:
+        click.echo("Done. Check .cortex/bootstrap.txt for details.")
 
 
 @click.command("distill")
