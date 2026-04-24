@@ -184,6 +184,28 @@ def signal_command(sample_kind: str) -> None:
     click.echo(f"Inbox file:                 {queued_path}")
 
 
+@click.command("mcp")
+@click.option(
+    "--transport",
+    default="stdio",
+    type=click.Choice(["stdio", "sse"]),
+    show_default=True,
+    help="MCP transport protocol.",
+)
+def mcp_command(transport: str) -> None:
+    """Start the Cortex MCP server for agent tool integration."""
+    try:
+        from agents.mcp_server import create_mcp_server
+    except ImportError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    server = create_mcp_server(Path.cwd())
+    try:
+        server.run(transport=transport)  # type: ignore[union-attr]
+    except RuntimeError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+
 @click.command("garden")
 def garden_command() -> None:
     """Stub garden command."""
