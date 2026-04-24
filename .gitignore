@@ -5,3 +5,4 @@ CORTEX.md
 __pycache__/
 *.pyc
 cortex.egg-info/
+.env
