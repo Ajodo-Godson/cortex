@@ -1,16 +1,68 @@
-"""Deterministic first-pass Distiller implementation."""
+"""Distiller: converts correction events into structured constraints."""
 
 from __future__ import annotations
 
 import json
+import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from core.schema import Constraint
 from core.schema import CorrectionEvent
+from core.storage import load_constraints
 from core.storage import read_session_records
 from core.storage import constraint_path
 from core.storage import save_constraint
+
+try:
+    import anthropic as _anthropic
+    _HAS_ANTHROPIC = True
+except ImportError:
+    _HAS_ANTHROPIC = False
+
+
+_SYSTEM_PROMPT = """\
+You are the Cortex constraint extractor. Cortex is a persistent constraint \
+layer that captures what NOT to do when writing code, based on real observed \
+errors and corrections.
+
+Given raw signals from a coding agent (code context, error context, and a \
+learned rule), extract a single structured operational constraint.
+
+Respond with ONLY a valid JSON object — no markdown fences, no explanation, \
+no commentary. The JSON must match this exact schema:
+
+{
+  "constraint_id": "<kebab-case-slug>-001",
+  "meta_type": "operational_constraint",
+  "scope": {
+    "language": "<python|typescript|go|rust|java|etc>",
+    "services": [],
+    "ast_triggers": ["<specific code token or pattern that triggers this constraint>"],
+    "error_codes": []
+  },
+  "context": "<one sentence describing when this constraint applies>",
+  "constraint": "<prose rule: Never [action] because [reason]. Always [alternative].>",
+  "never_do": ["<the specific forbidden action in plain English>"],
+  "because": "<why this action is dangerous or wrong>",
+  "instead": "<what to do instead>",
+  "evidence": [],
+  "validation": "<how to verify the constraint is being followed>",
+  "confidence": 0.80,
+  "source": "observed"
+}
+
+Strict rules:
+- constraint must be prose only — never contains backticks or code fences
+- never_do must have exactly one entry in plain English (no code syntax)
+- confidence must be between 0.0 and 0.85 (agent-flagged constraints cap at 0.85)
+- ast_triggers must contain specific code tokens (e.g. "db.session.commit()")
+- constraint_id must be kebab-case ending in a 3-digit sequence like -001
+- source is always "observed"
+- meta_type is "operational_constraint" for implementation rules, \
+"workflow_constraint" for process rules, "architectural_constraint" for design rules
+"""
 
 
 @dataclass
@@ -21,34 +73,68 @@ class DistillResult:
 
 
 class Distiller:
-    """Turns correction events into structured constraints."""
+    """Turns correction events into structured constraints.
+
+    When ANTHROPIC_API_KEY is set, distill_raw_signal() uses Claude to
+    convert free-form agent signals. distill_event() always uses the
+    deterministic rule-based path and does not require an API key.
+    """
 
     def __init__(self, repo_root: Path) -> None:
         self.repo_root = repo_root
+        self._client: object | None = None
+        if _HAS_ANTHROPIC and os.environ.get("ANTHROPIC_API_KEY"):
+            self._client = _anthropic.Anthropic()
+
+    # ── Public API ─────────────────────────────────────────────────────────────
 
     def distill_event(self, event: CorrectionEvent | dict[str, object]) -> Constraint:
-        """Convert a correction event into a validated constraint."""
-        parsed_event = event if isinstance(event, CorrectionEvent) else CorrectionEvent.model_validate(event)
-        evidence = parsed_event.evidence or []
-
+        """Convert a structured correction event into a validated constraint."""
+        parsed = event if isinstance(event, CorrectionEvent) else CorrectionEvent.model_validate(event)
+        evidence = parsed.evidence or []
         return Constraint(
-            constraint_id=parsed_event.constraint_id,
-            meta_type=parsed_event.meta_type,
-            scope=parsed_event.scope,
-            context=parsed_event.context,
-            constraint=self._build_constraint_text(parsed_event),
-            never_do=[parsed_event.failing_action],
-            because=parsed_event.because,
-            instead=parsed_event.instead,
+            constraint_id=parsed.constraint_id,
+            meta_type=parsed.meta_type,
+            scope=parsed.scope,
+            context=parsed.context,
+            constraint=self._build_constraint_text(parsed),
+            never_do=[parsed.failing_action],
+            because=parsed.because,
+            instead=parsed.instead,
             evidence=evidence,
-            validation=parsed_event.validation,
-            confidence=parsed_event.confidence,
-            last_validated=parsed_event.last_validated,
-            source=parsed_event.source,
+            validation=parsed.validation,
+            confidence=parsed.confidence,
+            last_validated=parsed.last_validated,
+            source=parsed.source,
         )
 
     def distill_events(self, events: list[CorrectionEvent | dict[str, object]]) -> list[Constraint]:
         return [self.distill_event(event) for event in events]
+
+    def distill_raw_signal(
+        self,
+        code_context: str,
+        error_context: str,
+        learned_rule: str,
+    ) -> Constraint:
+        """Use Claude to convert a raw agent signal into a constraint.
+
+        Requires ANTHROPIC_API_KEY. The constraint is NOT automatically saved —
+        the caller is responsible for calling save_constraint().
+        """
+        if self._client is None:
+            raise RuntimeError(
+                "ANTHROPIC_API_KEY not set. "
+                "Set it to enable real-time constraint extraction."
+            )
+        raw = self._call_claude(code_context, error_context, learned_rule)
+        proposed_id = str(raw.get("constraint_id", "agent-flagged-001"))
+        raw["constraint_id"] = self._next_constraint_id(proposed_id)
+        raw["source"] = "observed"
+        raw.setdefault("evidence", [])
+        conf = float(raw.get("confidence", 0.80))
+        raw["confidence"] = min(conf, 0.85)
+        return Constraint.model_validate(raw)
 
     def run(self, log_path: Path | str) -> DistillResult:
         """Distill newline-delimited JSON correction events from a session log."""
@@ -72,6 +158,56 @@ class Distiller:
             new_constraints=new_constraints,
             updated_constraints=updated_constraints,
         )
+
+    # ── Claude integration ─────────────────────────────────────────────────────
+
+    def _call_claude(
+        self,
+        code_context: str,
+        error_context: str,
+        learned_rule: str,
+    ) -> dict[str, object]:
+        response = self._client.messages.create(  # type: ignore[union-attr]
+            model="claude-opus-4-7",
+            max_tokens=1024,
+            thinking={"type": "adaptive"},
+            system=[
+                {
+                    "type": "text",
+                    "text": _SYSTEM_PROMPT,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=[
+                {
+                    "role": "user",
+                    "content": (
+                        f"Code context:\n{code_context}\n\n"
+                        f"Error context:\n{error_context}\n\n"
+                        f"Learned rule:\n{learned_rule}\n\n"
+                        "Extract a Cortex constraint. Respond with JSON only."
+                    ),
+                }
+            ],
+        )
+        for block in response.content:
+            if block.type == "text":
+                text = block.text.strip()
+                if text.startswith("```"):
+                    text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+                return json.loads(text)
+        raise ValueError("Claude returned no text content in distill_raw_signal")
+
+    def _next_constraint_id(self, proposed_id: str) -> str:
+        base = re.sub(r"-\d{3}$", "", proposed_id)
+        existing_ids = {c.constraint_id for c in load_constraints(self.repo_root)}
+        for seq in range(1, 1000):
+            candidate = f"{base}-{seq:03d}"
+            if candidate not in existing_ids:
+                return candidate
+        return f"{base}-999"
+
+    # ── Internal helpers ───────────────────────────────────────────────────────
 
     def _distill_log_file(self, log_path: Path) -> list[Constraint]:
         constraints: list[Constraint] = []
