@@ -98,10 +98,10 @@ This checklist translates `docs/CORTEX_README_v3.md` into an execution-oriented 
 
 ## P2: Agent Self-Writing
 
-- [ ] Design `cortex_flag` MCP tool contract
-- [ ] Accept code context, error context, and learned rule
-- [ ] Trigger Distiller immediately on candidate constraints
-- [ ] Store real-time constraints with correct provenance
+- [x] Design `cortex_flag` MCP tool contract
+- [x] Accept code context, error context, and learned rule
+- [x] Trigger Distiller immediately on candidate constraints
+- [x] Store real-time constraints with correct provenance
 
 ## P3: Gardener
 
