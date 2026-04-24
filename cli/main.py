@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import click
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from cli.commands import bootstrap_command
 from cli.commands import constraints_command
