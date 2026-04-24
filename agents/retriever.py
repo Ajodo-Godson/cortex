@@ -93,6 +93,13 @@ class Retriever:
             score += constraint.confidence
             reasons.append(f"confidence={constraint.confidence:.2f}")
 
+            seq_match = re.search(r"-(\d+)$", constraint.constraint_id)
+            seq = int(seq_match.group(1)) if seq_match else 1
+            if seq > 1:
+                seq_bonus = (seq - 1) * 0.01
+                score += seq_bonus
+                reasons.append(f"sequence bonus: {seq}")
+
             branch_matches = self._matches_tokens(constraint, branch_tokens)
             if branch_matches:
                 score += 2.0 * len(branch_matches)
