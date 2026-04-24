@@ -1,0 +1,16 @@
+[package]
+name = "ast_filter"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ast_filter"
+path = "src/main.rs"
+
+[dependencies]
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
