@@ -22,6 +22,8 @@ except ImportError:
     _HAS_ANTHROPIC = False
 
 
+_DEFAULT_MODEL = "claude-opus-4-7"
+
 _SYSTEM_PROMPT = """\
 You are the Cortex constraint extractor. Cortex is a persistent constraint \
 layer that captures what NOT to do when writing code, based on real observed \
@@ -75,16 +77,22 @@ class DistillResult:
 class Distiller:
     """Turns correction events into structured constraints.
 
-    When ANTHROPIC_API_KEY is set, distill_raw_signal() uses Claude to
-    convert free-form agent signals. distill_event() always uses the
-    deterministic rule-based path and does not require an API key.
+    Model and provider are controlled by environment variables:
+      CORTEX_MODEL     — model name (default: claude-opus-4-7)
+      CORTEX_API_KEY   — API key override (falls back to ANTHROPIC_API_KEY or OPENAI_API_KEY)
+      CORTEX_BASE_URL  — base URL for OpenAI-compatible endpoints (Ollama, Groq, etc.)
+
+    Provider is inferred from the model name:
+      claude-*  → Anthropic SDK (requires anthropic package)
+      anything else → OpenAI-compatible SDK (requires openai package)
+
+    distill_event() is always deterministic and requires no API key.
+    distill_raw_signal() requires the appropriate package and key.
     """
 
     def __init__(self, repo_root: Path) -> None:
         self.repo_root = repo_root
-        self._client: object | None = None
-        if _HAS_ANTHROPIC and os.environ.get("ANTHROPIC_API_KEY"):
-            self._client = _anthropic.Anthropic()
+        self._model = os.environ.get("CORTEX_MODEL", _DEFAULT_MODEL)
 
     # ── Public API ─────────────────────────────────────────────────────────────
 
@@ -117,17 +125,17 @@ class Distiller:
         error_context: str,
         learned_rule: str,
     ) -> Constraint:
-        """Use Claude to convert a raw agent signal into a constraint.
+        """Use an LLM to convert a raw agent signal into a constraint.
 
-        Requires ANTHROPIC_API_KEY. The constraint is NOT automatically saved —
-        the caller is responsible for calling save_constraint().
+        The constraint is NOT automatically saved — the caller is responsible
+        for calling save_constraint().
         """
-        if self._client is None:
-            raise RuntimeError(
-                "ANTHROPIC_API_KEY not set. "
-                "Set it to enable real-time constraint extraction."
-            )
-        raw = self._call_claude(code_context, error_context, learned_rule)
+        provider, client = self._build_client()
+        if provider == "anthropic":
+            raw = self._call_anthropic(client, code_context, error_context, learned_rule)
+        else:
+            raw = self._call_openai_compat(client, code_context, error_context, learned_rule)
+
         proposed_id = str(raw.get("constraint_id", "agent-flagged-001"))
         raw["constraint_id"] = self._next_constraint_id(proposed_id)
         raw["source"] = "observed"
@@ -159,18 +167,54 @@ class Distiller:
             updated_constraints=updated_constraints,
         )
 
-    # ── Claude integration ─────────────────────────────────────────────────────
+    # ── Provider routing ───────────────────────────────────────────────────────
 
-    def _call_claude(
+    def _build_client(self) -> tuple[str, object]:
+        """Return (provider, client) based on CORTEX_MODEL and available packages."""
+        model = self._model
+        api_key_override = os.environ.get("CORTEX_API_KEY")
+        base_url = os.environ.get("CORTEX_BASE_URL")
+
+        if model.startswith("claude-"):
+            if not _HAS_ANTHROPIC:
+                raise RuntimeError(
+                    "Install the anthropic package to use Claude models: "
+                    "pip install 'cortex[anthropic]'"
+                )
+            api_key = api_key_override or os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                raise RuntimeError(
+                    "Set ANTHROPIC_API_KEY (or CORTEX_API_KEY) to use Claude models."
+                )
+            kwargs: dict[str, str] = {"api_key": api_key}
+            if base_url:
+                kwargs["base_url"] = base_url
+            return "anthropic", _anthropic.Anthropic(**kwargs)
+
+        # OpenAI-compatible (OpenAI, Ollama, Groq, Together, OpenRouter, …)
+        try:
+            import openai as _openai  # noqa: PLC0415
+        except ImportError:
+            raise RuntimeError(
+                f"Install the openai package to use {model}: "
+                "pip install 'cortex[openai]'"
+            )
+        api_key = api_key_override or os.environ.get("OPENAI_API_KEY", "unused")
+        oa_kwargs: dict[str, str] = {"api_key": api_key}
+        if base_url:
+            oa_kwargs["base_url"] = base_url
+        return "openai", _openai.OpenAI(**oa_kwargs)
+
+    def _call_anthropic(
         self,
+        client: object,
         code_context: str,
         error_context: str,
         learned_rule: str,
     ) -> dict[str, object]:
-        response = self._client.messages.create(  # type: ignore[union-attr]
-            model="claude-opus-4-7",
+        response = client.messages.create(  # type: ignore[union-attr]
+            model=self._model,
             max_tokens=1024,
-            thinking={"type": "adaptive"},
             system=[
                 {
                     "type": "text",
@@ -181,22 +225,47 @@ class Distiller:
             messages=[
                 {
                     "role": "user",
-                    "content": (
-                        f"Code context:\n{code_context}\n\n"
-                        f"Error context:\n{error_context}\n\n"
-                        f"Learned rule:\n{learned_rule}\n\n"
-                        "Extract a Cortex constraint. Respond with JSON only."
-                    ),
+                    "content": self._user_prompt(code_context, error_context, learned_rule),
                 }
             ],
         )
         for block in response.content:
             if block.type == "text":
-                text = block.text.strip()
-                if text.startswith("```"):
-                    text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
-                return json.loads(text)
-        raise ValueError("Claude returned no text content in distill_raw_signal")
+                return self._parse_json(block.text)
+        raise ValueError("Model returned no text content")
+
+    def _call_openai_compat(
+        self,
+        client: object,
+        code_context: str,
+        error_context: str,
+        learned_rule: str,
+    ) -> dict[str, object]:
+        response = client.chat.completions.create(  # type: ignore[union-attr]
+            model=self._model,
+            messages=[
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": self._user_prompt(code_context, error_context, learned_rule)},
+            ],
+        )
+        text = response.choices[0].message.content or ""
+        return self._parse_json(text)
+
+    # ── Shared helpers ─────────────────────────────────────────────────────────
+
+    def _user_prompt(self, code_context: str, error_context: str, learned_rule: str) -> str:
+        return (
+            f"Code context:\n{code_context}\n\n"
+            f"Error context:\n{error_context}\n\n"
+            f"Learned rule:\n{learned_rule}\n\n"
+            "Extract a Cortex constraint. Respond with JSON only."
+        )
+
+    def _parse_json(self, text: str) -> dict[str, object]:
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+        return json.loads(text)
 
     def _next_constraint_id(self, proposed_id: str) -> str:
         base = re.sub(r"-\d{3}$", "", proposed_id)
