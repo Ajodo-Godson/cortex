@@ -89,12 +89,12 @@ This checklist translates `docs/CORTEX_README_v3.md` into an execution-oriented 
 
 ## P1d: Retrieval Stack
 
-- [ ] Implement `retrieval/ast_filter.rs`
-- [ ] Ensure L1 completes under 10ms
-- [ ] Implement semantic retrieval placeholder
-- [ ] Implement schema-aware reranking placeholder
-- [ ] Select top `N` constraints for session injection
-- [ ] Render selected constraints into `CORTEX.md`
+- [x] Implement `retrieval/ast_filter.rs`
+- [x] Ensure L1 completes under 10ms
+- [x] Implement semantic retrieval placeholder
+- [x] Implement schema-aware reranking placeholder
+- [x] Select top `N` constraints for session injection
+- [x] Render selected constraints into `CORTEX.md`
 
 ## P2: Agent Self-Writing
 
