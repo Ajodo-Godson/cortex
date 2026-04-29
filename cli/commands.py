@@ -209,7 +209,8 @@ def mcp_command(transport: str) -> None:
 
 @click.command("garden")
 @click.option("--auto", is_flag=True, help="Reconcile and save all conflicts without prompting.")
-def garden_command(auto: bool) -> None:
+@click.option("--deep", is_flag=True, help="Use LLM to detect semantic conflicts the keyword heuristic misses.")
+def garden_command(auto: bool, deep: bool) -> None:
     """Scan the constraint library for conflicts and reconcile them."""
     from gardener.gardener import Gardener
 
@@ -219,9 +220,10 @@ def garden_command(auto: bool) -> None:
         click.echo("No constraints found. Run 'cortex bootstrap' or add constraints first.")
         return
 
-    click.echo(f"Scanning {len(constraints)} constraint(s) for conflicts...")
+    mode = " (deep mode)" if deep else ""
+    click.echo(f"Scanning {len(constraints)} constraint(s) for conflicts{mode}...")
     g = Gardener(repo_root)
-    reports = g.scan()
+    reports = g.scan(deep=deep)
 
     if not reports:
         click.echo("No conflicts detected.")
