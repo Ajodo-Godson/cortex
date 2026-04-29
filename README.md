@@ -56,14 +56,9 @@ cortex mcp [--transport stdio|sse]
 | `CORTEX_BASE_URL` | OpenAI-compatible base URL (NVIDIA NIM, Ollama, etc.) |
 
 ## Status
+Phase P0–P4, P7 | CLI, Distiller, Observer, Bootstrapper, Retrieval, MCP, Gardener, Decay, Coverage are implemented already. 
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| P0–P4, P7 | CLI, Distiller, Observer, Bootstrapper, Retrieval, MCP, Gardener, Decay, Coverage | ✅ |
-| P5 | Cross-repo inheritance | 🔲 |
-| P6 | Incident feed | 🔲 |
-| P8 | Impact scoring | 🔲 |
-| P9 | Viewer | 🔲 |
+P5 (Cross-repo inheritance), P6 (Incident feed) , P8 (Impact scoring) , P9(Viewer) are yet to be
 
 ## Contributing
 
