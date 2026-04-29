@@ -30,6 +30,38 @@ cortex stop
 
 `cortex start` injects your constraints into `CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex) automatically. Both files are cleaned up on `cortex stop`. On first run, Cortex bootstraps from your git history and creates `.cortex/` in your repo.
 
+## Agent setup
+
+### Claude Code
+
+Register the Cortex MCP server once:
+
+```bash
+claude mcp add --transport stdio cortex -- cortex mcp
+```
+
+During a session, Claude Code can call `cortex_flag` to self-write a constraint the moment it recognises a correction pattern — no manual step required.
+
+### Codex CLI
+
+Add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.cortex]
+command = "cortex mcp"
+```
+
+Codex will call `cortex_flag` the same way during sessions.
+
+### What gets captured automatically
+
+| Signal | How |
+|--------|-----|
+| `git revert` during a session | Observer (GitWatcher) |
+| Commit with `fix:` / `hotfix:` prefix | Observer (GitWatcher) |
+| Pytest failures | Observer (FailureWatcher) |
+| Chat-level correction (agent redoes work) | Agent calls `cortex_flag` via MCP |
+
 ## CLI reference
 
 ```
