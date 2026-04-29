@@ -7,7 +7,7 @@ A persistent constraint layer for AI coding agents. Cortex watches your sessions
 **Requirements:** Python 3.11+, git, Rust (for the AST filter — `curl https://sh.rustup.rs | sh`)
 
 ```bash
-git clone https://github.com/your-username/cortex
+git clone https://github.com/Ajodo-Godson/cortex
 cd cortex
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[anthropic]"   # or [openai] or [all]
