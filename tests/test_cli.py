@@ -41,7 +41,7 @@ def test_start_and_stop_session() -> None:
 
         start_result = runner.invoke(main, ["start", "--no-bootstrap"])
         assert start_result.exit_code == 0
-        assert (repo_root / "CORTEX.md").exists()
+        assert (repo_root / "CLAUDE.md").exists()
         assert (repo_root / ".cortex" / "session.lock").exists()
 
         status_result = runner.invoke(main, ["status"])
@@ -50,7 +50,7 @@ def test_start_and_stop_session() -> None:
 
         stop_result = runner.invoke(main, ["stop"])
         assert stop_result.exit_code == 0
-        assert not (repo_root / "CORTEX.md").exists()
+        assert not (repo_root / "CLAUDE.md").exists()
         assert not (repo_root / ".cortex" / "session.lock").exists()
 
 
