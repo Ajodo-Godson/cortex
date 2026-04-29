@@ -7,15 +7,17 @@ A persistent constraint layer for AI coding agents. Cortex watches your sessions
 **Requirements:** Python 3.11+, git, Rust (for the AST filter — `curl https://sh.rustup.rs | sh`)
 
 ```bash
+# Install pipx if you don't have it
+brew install pipx && pipx ensurepath
+
+# Clone and install
 git clone https://github.com/Ajodo-Godson/cortex
 cd cortex
-python3 -m venv .venv && source .venv/bin/activate
-pip install --upgrade pip
-pip install -e ".[anthropic]"   # or [openai] or [all]
-cp .env.example .env            # add your API key
+pipx install -e ".[anthropic]"   # or [openai] or [all]
+cp .env.example .env             # add your API key
 ```
 
-The `cortex` command is now available in your shell.
+The `cortex` command is now available in any directory.
 
 ## Quickstart
 
