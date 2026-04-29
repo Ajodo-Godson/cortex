@@ -8,6 +8,7 @@ import click
 
 from agents.distiller import Distiller
 from agents.observer import ObserverManager
+from core.inject import remove_constraints
 from core.session import SessionManager
 
 
@@ -28,9 +29,7 @@ def stop_command() -> None:
     distiller = Distiller(repo_root)
     distill_result = distiller.run(session.log_path)
 
-    cortex_md = repo_root / "CORTEX.md"
-    if cortex_md.exists():
-        cortex_md.unlink()
+    remove_constraints(repo_root)
 
     session_manager.end_session()
 
