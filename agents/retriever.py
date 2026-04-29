@@ -7,6 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.coverage import record_retrieval_hit, record_unconstrained_files
 from core.schema import Constraint
 from core.storage import load_constraints
 from retrieval import ast_filter as l1
@@ -57,6 +58,13 @@ class Retriever:
 
         # L3: scope-aware reranking
         ranked = l3.rerank(scored, language="python", max_results=5)
+
+        # P7: log retrieval hits to coverage map
+        for c, _, _ in ranked:
+            triggered = l1_hits.get(c.constraint_id, [])
+            files_for_constraint = [f for f in touched_files if triggered]
+            record_retrieval_hit(self.repo_root, c.constraint_id, files_for_constraint)
+        record_unconstrained_files(self.repo_root, touched_files)
 
         return RetrievalResult(
             constraints=[
