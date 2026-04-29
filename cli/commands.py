@@ -185,6 +185,50 @@ def signal_command(sample_kind: str) -> None:
     click.echo(f"Inbox file:                 {queued_path}")
 
 
+@click.command("coverage")
+@click.option("--json", "as_json", is_flag=True, help="Output raw JSON for tooling or the Viewer.")
+def coverage_command(as_json: bool) -> None:
+    """Show the constraint coverage map for this repo."""
+    import json as _json
+    from core.coverage import load_coverage
+
+    data = load_coverage(Path.cwd())
+    if as_json:
+        click.echo(_json.dumps(data, indent=2))
+        return
+
+    hits = data.get("constraint_hits", {})
+    file_cov = data.get("file_coverage", {})
+    unconstrained = data.get("unconstrained_files", [])
+
+    if not hits and not unconstrained:
+        click.echo("No coverage data yet. Run 'cortex start' in a session to begin tracking.")
+        return
+
+    if hits:
+        click.echo("── Constraint retrieval hits " + "─" * 32)
+        for cid, entry in sorted(hits.items(), key=lambda x: -x[1]["hit_count"]):
+            files = ", ".join(entry["triggered_by_files"]) or "no specific file"
+            click.echo(f"  {cid:45s}  hits={entry['hit_count']}  last={entry['last_hit']}")
+            if entry["triggered_by_files"]:
+                click.echo(f"    triggered by: {files}")
+
+    if unconstrained:
+        click.echo(f"\n── Unconstrained files ({len(unconstrained)}) " + "─" * 20)
+        for f in sorted(unconstrained):
+            click.echo(f"  {f}")
+
+    if file_cov:
+        top = sorted(file_cov.items(), key=lambda x: -x[1]["touch_count"])[:5]
+        click.echo("\n── Most active files " + "─" * 38)
+        for path, fc in top:
+            n = len(fc["constraints_triggered"])
+            click.echo(f"  {path:50s}  touches={fc['touch_count']}  constraints={n}")
+
+    updated = data.get("last_updated", "never")
+    click.echo(f"\nLast updated: {updated}")
+
+
 @click.command("decay")
 @click.option("--apply", "do_apply", is_flag=True, help="Write updated confidence values back to the constraint library.")
 def decay_command(do_apply: bool) -> None:
