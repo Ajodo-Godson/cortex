@@ -185,6 +185,37 @@ def signal_command(sample_kind: str) -> None:
     click.echo(f"Inbox file:                 {queued_path}")
 
 
+@click.command("decay")
+@click.option("--apply", "do_apply", is_flag=True, help="Write updated confidence values back to the constraint library.")
+def decay_command(do_apply: bool) -> None:
+    """Scan for stale constraints and decay their confidence scores."""
+    from agents.decay import ConstraintDecay
+
+    repo_root = Path.cwd()
+    d = ConstraintDecay(repo_root)
+    reports = d.scan()
+
+    if not reports:
+        click.echo("No stale constraints detected.")
+        return
+
+    for report in reports:
+        cid = report.constraint.constraint_id
+        status = " → ROUTE TO GARDENER" if report.routed_to_gardener else ""
+        click.echo(f"{cid}{status}")
+        click.echo(f"  Missing triggers:  {', '.join(report.missing_triggers)}")
+        click.echo(f"  Confidence:        {report.original_confidence:.2f} → {report.new_confidence:.2f}  (drift {report.drift_ratio:.0%})")
+
+    if do_apply:
+        d.apply(reports)
+        click.echo(f"\nApplied decay to {len(reports)} constraint(s).")
+        gardener_count = sum(1 for r in reports if r.routed_to_gardener)
+        if gardener_count:
+            click.echo(f"{gardener_count} constraint(s) dropped below threshold — run 'cortex garden' to review.")
+    else:
+        click.echo("\nRun with --apply to write these changes.")
+
+
 @click.command("mcp")
 @click.option(
     "--transport",
