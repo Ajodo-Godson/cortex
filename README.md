@@ -24,11 +24,11 @@ The `cortex` command is now available in any directory.
 ```bash
 cd your-project
 cortex start
-# run your AI coding session
+# open Claude Code or Codex and work as normal
 cortex stop
 ```
 
-On first run, Cortex bootstraps from your git history and creates `.cortex/` in your repo.
+`cortex start` injects your constraints into `CLAUDE.md` (Claude Code) and `AGENTS.md` (Codex) automatically. Both files are cleaned up on `cortex stop`. On first run, Cortex bootstraps from your git history and creates `.cortex/` in your repo.
 
 ## CLI reference
 
