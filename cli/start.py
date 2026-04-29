@@ -9,6 +9,7 @@ import click
 from agents.bootstrapper import Bootstrapper
 from agents.observer import ObserverManager
 from agents.retriever import Retriever
+from core.inject import inject_constraints
 from core.session import SessionManager
 from core.storage import ensure_cortex_dirs
 from templates.renderer import render_cortex_markdown
@@ -64,8 +65,8 @@ def start_command(dry_run: bool, verbose: bool, boost: str | None, no_bootstrap:
         click.echo("Dry run complete. No session started.")
         return
 
-    cortex_md_path = repo_root / "CORTEX.md"
-    cortex_md_path.write_text(cortex_markdown, encoding="utf-8")
+    written = inject_constraints(repo_root, cortex_markdown)
+    targets = ", ".join(p.name for p in written)
 
     log_path = session_manager.create_session_log()
     observer = ObserverManager(repo_root)
@@ -74,7 +75,7 @@ def start_command(dry_run: bool, verbose: bool, boost: str | None, no_bootstrap:
 
     click.echo(f"Repo:       {repo_root.name}")
     click.echo(f"Library:    initialized at {session_manager.cortex_dir}")
-    click.echo(f"Retrieved:  {len(result.constraints)} constraints injected into CORTEX.md")
+    click.echo(f"Retrieved:  {len(result.constraints)} constraints injected into {targets}")
     click.echo(f"Observer:   running (PID {observer_state.pid})")
     click.echo(f"Session:    {session.started_at}")
     click.echo("")
