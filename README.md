@@ -9,7 +9,8 @@ A persistent constraint layer for AI coding agents. Cortex watches your sessions
 ```bash
 git clone https://github.com/Ajodo-Godson/cortex
 cd cortex
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
+pip install --upgrade pip
 pip install -e ".[anthropic]"   # or [openai] or [all]
 cp .env.example .env            # add your API key
 ```
