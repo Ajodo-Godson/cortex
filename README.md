@@ -48,7 +48,8 @@ Add to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.cortex]
-command = "cortex mcp"
+command = "cortex"
+args = ["mcp"]
 ```
 
 Codex will call `cortex_flag` the same way during sessions.
