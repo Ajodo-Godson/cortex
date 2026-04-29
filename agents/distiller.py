@@ -129,6 +129,7 @@ class Distiller:
         else:
             raw = self._call_openai_compat(client, code_context, error_context, learned_rule)
 
+        raw = self._normalize_raw(raw)
         proposed_id = str(raw.get("constraint_id", "agent-flagged-001"))
         raw["constraint_id"] = self._next_constraint_id(proposed_id)
         raw["source"] = "observed"
@@ -220,6 +221,19 @@ class Distiller:
             f"Learned rule:\n{learned_rule}\n\n"
             "Extract a Cortex constraint. Respond with JSON only."
         )
+
+    def _normalize_raw(self, raw: dict[str, object]) -> dict[str, object]:
+        """Coerce fields that must be lists but LLMs sometimes return as strings."""
+        for field in ("never_do", "evidence", "ast_triggers", "services", "error_codes"):
+            val = raw.get(field)
+            if isinstance(val, str):
+                raw[field] = [val] if val else []
+            scope = raw.get("scope")
+            if isinstance(scope, dict):
+                sv = scope.get(field)
+                if isinstance(sv, str):
+                    scope[field] = [sv] if sv else []
+        return raw
 
     def _parse_json(self, text: str) -> dict[str, object]:
         text = text.strip()
