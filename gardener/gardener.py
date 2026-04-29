@@ -15,50 +15,11 @@ from core.schema import Constraint
 from core.storage import load_constraints
 
 
-_OPPOSING_PAIRS = [
-    # temporal
-    ("always", "never"),
-    ("before", "after"),
-    ("early", "late"),
-    ("eager", "lazy"),
-    ("immediately", "defer"),
-    # spatial / structural
-    ("inside", "outside"),
-    ("within", "without"),
-    ("inline", "extracted"),
-    ("wrap", "avoid"),
-    ("nested", "flat"),
-    # concurrency
-    ("synchronous", "asynchronous"),
-    ("sync", "async"),
-    ("sequential", "parallel"),
-    ("sequential", "concurrent"),
-    ("blocking", "nonblocking"),
-    # resource lifecycle
-    ("acquire", "release"),
-    ("open", "close"),
-    ("lock", "unlock"),
-    ("allocate", "free"),
-    ("connect", "disconnect"),
-    # data handling
-    ("batch", "individual"),
-    ("single", "batch"),
-    ("cache", "bypass"),
-    ("encrypt", "plain"),
-    ("validate", "skip"),
-    ("strict", "permissive"),
-    ("explicit", "implicit"),
-    ("mutable", "immutable"),
-    # error handling
-    ("retry", "abort"),
-    ("fail", "ignore"),
-    ("raise", "swallow"),
-    # flow
-    ("allow", "block"),
-    ("allow", "deny"),
-    ("push", "pull"),
-    ("stateful", "stateless"),
-]
+# Minimum Jaccard overlap between context texts to bother sending a pair to the LLM.
+_DEEP_OVERLAP_THRESHOLD = 0.15
+
+# Minimum Jaccard overlap between (A.instead ↔ B.never_do) to flag as heuristic conflict.
+_CROSS_MATCH_THRESHOLD = 0.40
 
 _CONFLICT_CHECK_SYSTEM = """\
 You are the Cortex Gardener. Determine whether two coding constraints conflict with each \
@@ -132,11 +93,15 @@ class Gardener:
     def scan(self, deep: bool = False) -> list[ConflictReport]:
         """Return all conflict pairs detected among stored constraints.
 
-        deep=False (default): heuristic only — fast, no API calls.
-        deep=True: heuristic first; pairs with high token overlap but no keyword
-                   match are also sent to the LLM for semantic conflict detection.
+        Only observed constraints are scanned — inferred meta-constraints are
+        reconciliation outputs, not inputs, and are excluded to prevent cascades.
+
+        deep=False (default): heuristic only — no API calls.
+        deep=True: heuristic first; pairs above the topic-overlap threshold that
+                   were not caught by the heuristic are also verified by the LLM.
         """
-        constraints = load_constraints(self.repo_root)
+        all_constraints = load_constraints(self.repo_root)
+        constraints = [c for c in all_constraints if c.source == "observed"]
         if len(constraints) < 2:
             return []
 
@@ -145,9 +110,14 @@ class Gardener:
         for a, b in itertools.combinations(constraints, 2):
             conflicting, explanation = self._detect_conflict(a, b)
             if not conflicting and deep:
-                conflicting, explanation = self._llm_check_conflict(
-                    provider, client, a, b  # type: ignore[arg-type]
+                topic_overlap = self._jaccard(
+                    self._tokenize(f"{a.context} {a.constraint}"),
+                    self._tokenize(f"{b.context} {b.constraint}"),
                 )
+                if topic_overlap >= _DEEP_OVERLAP_THRESHOLD:
+                    conflicting, explanation = self._llm_check_conflict(
+                        provider, client, a, b  # type: ignore[arg-type]
+                    )
             if conflicting:
                 reports.append(ConflictReport(
                     constraint_a=a,
@@ -171,17 +141,24 @@ class Gardener:
         ])
         return Constraint.model_validate(raw)
 
-    # ── Conflict detection (heuristic, no API) ─────────────────────────────────
+    # ── Conflict detection ─────────────────────────────────────────────────────
 
     def _detect_conflict(self, a: Constraint, b: Constraint) -> tuple[bool, str]:
-        # Skip if languages explicitly differ
+        """Heuristic conflict detection — no API calls.
+
+        Two signals:
+        1. Structural: same ast_trigger, different never_do (definite conflict).
+        2. Semantic cross-match: A's prescribed solution (instead) overlaps with
+           B's forbidden action (never_do), or vice versa. This catches the
+           pattern where following one rule forces you to break the other.
+        """
         if (
             a.scope.language and b.scope.language
             and a.scope.language.lower() != b.scope.language.lower()
         ):
             return False, ""
 
-        # Shared ast_triggers with different never_do rules
+        # Signal 1: shared ast_trigger, different rules
         shared_triggers = set(a.scope.ast_triggers) & set(b.scope.ast_triggers)
         if shared_triggers and a.never_do[0].lower() != b.never_do[0].lower():
             return True, (
@@ -189,24 +166,19 @@ class Gardener:
                 f"but prescribe different forbidden actions"
             )
 
-        # Opposing directives with sufficient token overlap
-        a_text = f"{a.constraint} {a.never_do[0]} {a.instead}".lower()
-        b_text = f"{b.constraint} {b.never_do[0]} {b.instead}".lower()
-        a_tokens = {t for t in re.split(r"\W+", a_text) if len(t) >= 3}
-        b_tokens = {t for t in re.split(r"\W+", b_text) if len(t) >= 3}
-        overlap = len(a_tokens & b_tokens) / max(len(a_tokens | b_tokens), 1)
-
-        if overlap >= 0.25:
-            for pos_word, neg_word in _OPPOSING_PAIRS:
-                a_has_pos = pos_word in a_text
-                b_has_neg = neg_word in b_text
-                a_has_neg = neg_word in a_text
-                b_has_pos = pos_word in b_text
-                if (a_has_pos and b_has_neg) or (a_has_neg and b_has_pos):
-                    return True, (
-                        f"Opposing directives ('{pos_word}' vs '{neg_word}') "
-                        f"on related topics (overlap={overlap:.0%})"
-                    )
+        # Signal 2: A's solution is B's problem, or vice versa
+        score_ab = self._jaccard(self._tokenize(a.instead), self._tokenize(b.never_do[0]))
+        if score_ab >= _CROSS_MATCH_THRESHOLD:
+            return True, (
+                f"Following A's guidance ('{a.instead[:60]}…') "
+                f"matches B's forbidden pattern (overlap={score_ab:.0%})"
+            )
+        score_ba = self._jaccard(self._tokenize(b.instead), self._tokenize(a.never_do[0]))
+        if score_ba >= _CROSS_MATCH_THRESHOLD:
+            return True, (
+                f"Following B's guidance ('{b.instead[:60]}…') "
+                f"matches A's forbidden pattern (overlap={score_ba:.0%})"
+            )
 
         return False, ""
 
@@ -221,10 +193,12 @@ class Gardener:
         user_msg = (
             f"Constraint A ({a.constraint_id}):\n"
             f"  Rule: {a.constraint}\n"
-            f"  Never do: {a.never_do[0]}\n\n"
+            f"  Never do: {a.never_do[0]}\n"
+            f"  Instead: {a.instead}\n\n"
             f"Constraint B ({b.constraint_id}):\n"
             f"  Rule: {b.constraint}\n"
-            f"  Never do: {b.never_do[0]}\n\n"
+            f"  Never do: {b.never_do[0]}\n"
+            f"  Instead: {b.instead}\n\n"
             "Do these constraints conflict?"
         )
         try:
@@ -235,6 +209,16 @@ class Gardener:
         except Exception:
             pass
         return False, ""
+
+    # ── Token helpers ──────────────────────────────────────────────────────────
+
+    def _tokenize(self, text: str) -> set[str]:
+        return {t for t in re.split(r"\W+", text.lower()) if len(t) >= 3}
+
+    def _jaccard(self, a: set[str], b: set[str]) -> float:
+        if not a or not b:
+            return 0.0
+        return len(a & b) / len(a | b)
 
     # ── LLM calls ─────────────────────────────────────────────────────────────
 
