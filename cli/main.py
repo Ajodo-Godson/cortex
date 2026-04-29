@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from cli.commands import bootstrap_command
+from cli.commands import decay_command
 from cli.commands import constraints_command
 from cli.commands import diff_command
 from cli.commands import distill_command
@@ -37,6 +38,7 @@ main.add_command(bootstrap_command, name="bootstrap")
 main.add_command(distill_command, name="distill")
 main.add_command(record_command, name="record")
 main.add_command(signal_command, name="signal")
+main.add_command(decay_command, name="decay")
 main.add_command(mcp_command, name="mcp")
 main.add_command(garden_command, name="garden")
 main.add_command(view_command, name="view")
