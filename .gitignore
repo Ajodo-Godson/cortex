@@ -7,3 +7,4 @@ __pycache__/
 cortex.egg-info/
 .env
 retrieval/ast_filter/target/
+docs/
