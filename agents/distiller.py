@@ -8,21 +8,14 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from core.llm import build_client as _build_llm_client
+from core.llm import DEFAULT_MODEL as _DEFAULT_MODEL
 from core.schema import Constraint
 from core.schema import CorrectionEvent
 from core.storage import load_constraints
 from core.storage import read_session_records
 from core.storage import constraint_path
 from core.storage import save_constraint
-
-try:
-    import anthropic as _anthropic
-    _HAS_ANTHROPIC = True
-except ImportError:
-    _HAS_ANTHROPIC = False
-
-
-_DEFAULT_MODEL = "claude-opus-4-7"
 
 _SYSTEM_PROMPT = """\
 You are the Cortex constraint extractor. Cortex is a persistent constraint \
@@ -170,43 +163,7 @@ class Distiller:
     # ── Provider routing ───────────────────────────────────────────────────────
 
     def _build_client(self) -> tuple[str, object]:
-        """Return (provider, client) based on CORTEX_MODEL and available packages."""
-        model = self._model
-        api_key_override = os.environ.get("CORTEX_API_KEY")
-        base_url = os.environ.get("CORTEX_BASE_URL")
-
-        if model.startswith("claude-"):
-            if not _HAS_ANTHROPIC:
-                raise RuntimeError(
-                    "Install the anthropic package to use Claude models: "
-                    "pip install 'cortex[anthropic]'"
-                )
-            api_key = api_key_override or os.environ.get("ANTHROPIC_API_KEY")
-            if not api_key:
-                raise RuntimeError(
-                    "Set ANTHROPIC_API_KEY (or CORTEX_API_KEY) to use Claude models."
-                )
-            # CORTEX_BASE_URL is for OpenAI-compatible endpoints only.
-            # For a custom Anthropic proxy use ANTHROPIC_BASE_URL instead.
-            anthropic_base = os.environ.get("ANTHROPIC_BASE_URL")
-            kwargs: dict[str, str] = {"api_key": api_key}
-            if anthropic_base:
-                kwargs["base_url"] = anthropic_base
-            return "anthropic", _anthropic.Anthropic(**kwargs)
-
-        # OpenAI-compatible (OpenAI, Ollama, Groq, Together, OpenRouter, …)
-        try:
-            import openai as _openai  # noqa: PLC0415
-        except ImportError:
-            raise RuntimeError(
-                f"Install the openai package to use {model}: "
-                "pip install 'cortex[openai]'"
-            )
-        api_key = api_key_override or os.environ.get("OPENAI_API_KEY", "unused")
-        oa_kwargs: dict[str, str] = {"api_key": api_key}
-        if base_url:
-            oa_kwargs["base_url"] = base_url
-        return "openai", _openai.OpenAI(**oa_kwargs)
+        return _build_llm_client(self._model)
 
     def _call_anthropic(
         self,
