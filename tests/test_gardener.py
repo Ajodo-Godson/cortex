@@ -84,39 +84,43 @@ def test_detect_conflict_shared_trigger_different_rules() -> None:
     assert "db.session.commit()" in explanation
 
 
-def test_detect_conflict_opposing_always_never() -> None:
+def test_detect_conflict_cross_match_a_solution_is_b_problem() -> None:
     g = Gardener(Path("/tmp"))
+    # A says: call token service before opening transaction
+    # B says: never call token service before opening transaction
     a = _make_constraint(
-        "always-open-tx-001",
-        "Always open the transaction before calling the token service.",
-        "Call token service outside a transaction",
-        "Open transaction then call token service inside it",
+        "refresh-before-tx-001",
+        "Always call the token service before opening a database transaction.",
+        "Open a database transaction before calling the token service",
+        "Call the token service before opening the database transaction",
     )
     b = _make_constraint(
-        "never-token-in-tx-001",
-        "Never call the token service inside an open transaction.",
-        "Call token service inside a transaction",
-        "Call token service before opening the transaction",
+        "no-token-before-tx-001",
+        "Never call the token service before a database transaction in payment flows.",
+        "Call the token service before opening the database transaction",
+        "Open the transaction first and call the token service inside it",
     )
-    conflicting, _ = g._detect_conflict(a, b)
+    conflicting, explanation = g._detect_conflict(a, b)
     assert conflicting is True
+    assert "A's guidance" in explanation
 
 
-def test_detect_conflict_opposing_inside_outside() -> None:
+def test_detect_conflict_cross_match_b_solution_is_a_problem() -> None:
     g = Gardener(Path("/tmp"))
+    # B says: commit outside the loop — but A says: never commit outside the loop
     a = _make_constraint(
-        "lock-inside-001",
-        "Always acquire the lock inside the retry loop.",
-        "Acquire the lock outside the retry loop",
-        "Acquire the lock inside each retry attempt",
+        "commit-per-item-001",
+        "Always commit the transaction after each individual item write.",
+        "Commit the transaction outside the item processing loop",
+        "Commit the transaction after each individual item write inside the loop",
     )
     b = _make_constraint(
-        "lock-outside-001",
-        "Never acquire locks inside a retry loop to avoid deadlocks.",
-        "Acquire locks inside a retry loop",
-        "Acquire the lock once outside and release after all retries",
+        "no-commit-in-loop-001",
+        "Never commit a database transaction inside a loop.",
+        "Commit the transaction inside the item processing loop",
+        "Batch all writes then commit the transaction outside the loop",
     )
-    conflicting, _ = g._detect_conflict(a, b)
+    conflicting, explanation = g._detect_conflict(a, b)
     assert conflicting is True
 
 
@@ -192,6 +196,36 @@ def test_scan_returns_empty_for_non_conflicting_stored(tmp_path: Path) -> None:
     cdir = tmp_path / ".cortex" / "constraints"
     _write_constraint(cdir, _make_constraint("no-eval-001", "Never use eval().", "Use eval()", "Use ast.literal_eval()"))
     _write_constraint(cdir, _make_constraint("use-utc-001", "Always use UTC.", "Use local time", "Convert to UTC"))
+    assert Gardener(tmp_path).scan() == []
+
+
+def test_scan_excludes_inferred_constraints(tmp_path: Path) -> None:
+    ensure_cortex_dirs(tmp_path)
+    cdir = tmp_path / ".cortex" / "constraints"
+    observed = _make_constraint(
+        "commit-always-001",
+        "Always commit after every write.",
+        "Skip commit after write",
+        "Commit immediately after each write",
+        ast_triggers=["db.session.commit()"],
+    )
+    inferred = Constraint(
+        constraint_id="meta-something-001",
+        meta_type="operational_constraint",
+        scope=Scope(language="python", services=[], ast_triggers=["db.session.commit()"], error_codes=[]),
+        context="Meta rule",
+        constraint="Never skip commit after write. Commit outside the loop.",
+        never_do=["Skip commit after write"],
+        because="data loss",
+        instead="Commit immediately after each write",
+        evidence=[],
+        validation="run tests",
+        confidence=0.75,
+        source="inferred",
+    )
+    _write_constraint(cdir, observed)
+    _write_constraint(cdir, inferred)
+    # Only 1 observed constraint — not enough to detect conflicts
     assert Gardener(tmp_path).scan() == []
 
 
