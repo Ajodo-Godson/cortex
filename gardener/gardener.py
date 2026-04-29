@@ -16,13 +16,57 @@ from core.storage import load_constraints
 
 
 _OPPOSING_PAIRS = [
+    # temporal
     ("always", "never"),
-    ("inside", "outside"),
     ("before", "after"),
+    ("early", "late"),
+    ("eager", "lazy"),
+    ("immediately", "defer"),
+    # spatial / structural
+    ("inside", "outside"),
     ("within", "without"),
+    ("inline", "extracted"),
     ("wrap", "avoid"),
-    ("retry", "never retry"),
+    ("nested", "flat"),
+    # concurrency
+    ("synchronous", "asynchronous"),
+    ("sync", "async"),
+    ("sequential", "parallel"),
+    ("sequential", "concurrent"),
+    ("blocking", "nonblocking"),
+    # resource lifecycle
+    ("acquire", "release"),
+    ("open", "close"),
+    ("lock", "unlock"),
+    ("allocate", "free"),
+    ("connect", "disconnect"),
+    # data handling
+    ("batch", "individual"),
+    ("single", "batch"),
+    ("cache", "bypass"),
+    ("encrypt", "plain"),
+    ("validate", "skip"),
+    ("strict", "permissive"),
+    ("explicit", "implicit"),
+    ("mutable", "immutable"),
+    # error handling
+    ("retry", "abort"),
+    ("fail", "ignore"),
+    ("raise", "swallow"),
+    # flow
+    ("allow", "block"),
+    ("allow", "deny"),
+    ("push", "pull"),
+    ("stateful", "stateless"),
 ]
+
+_CONFLICT_CHECK_SYSTEM = """\
+You are the Cortex Gardener. Determine whether two coding constraints conflict with each \
+other — meaning following one would require violating the other in some plausible scenario.
+
+Respond with ONLY a valid JSON object — no markdown fences:
+{"conflicts": true or false, "explanation": "<one sentence if conflicts is true, else empty>"}
+"""
 
 _DUEL_SYSTEM = """\
 You are the Cortex Gardener. Generate a short synthetic scenario (2-3 sentences) where \
@@ -85,14 +129,25 @@ class Gardener:
         self.repo_root = repo_root
         self._model = os.environ.get("CORTEX_MODEL", _DEFAULT_MODEL)
 
-    def scan(self) -> list[ConflictReport]:
-        """Return all conflict pairs found via heuristic analysis. No API calls."""
+    def scan(self, deep: bool = False) -> list[ConflictReport]:
+        """Return all conflict pairs detected among stored constraints.
+
+        deep=False (default): heuristic only — fast, no API calls.
+        deep=True: heuristic first; pairs with high token overlap but no keyword
+                   match are also sent to the LLM for semantic conflict detection.
+        """
         constraints = load_constraints(self.repo_root)
         if len(constraints) < 2:
             return []
+
+        provider, client = (_build_llm_client(self._model) if deep else (None, None))
         reports = []
         for a, b in itertools.combinations(constraints, 2):
             conflicting, explanation = self._detect_conflict(a, b)
+            if not conflicting and deep:
+                conflicting, explanation = self._llm_check_conflict(
+                    provider, client, a, b  # type: ignore[arg-type]
+                )
             if conflicting:
                 reports.append(ConflictReport(
                     constraint_a=a,
@@ -153,6 +208,32 @@ class Gardener:
                         f"on related topics (overlap={overlap:.0%})"
                     )
 
+        return False, ""
+
+    def _llm_check_conflict(
+        self,
+        provider: str,
+        client: object,
+        a: Constraint,
+        b: Constraint,
+    ) -> tuple[bool, str]:
+        """Ask the LLM whether two constraints conflict. Used only in --deep mode."""
+        user_msg = (
+            f"Constraint A ({a.constraint_id}):\n"
+            f"  Rule: {a.constraint}\n"
+            f"  Never do: {a.never_do[0]}\n\n"
+            f"Constraint B ({b.constraint_id}):\n"
+            f"  Rule: {b.constraint}\n"
+            f"  Never do: {b.never_do[0]}\n\n"
+            "Do these constraints conflict?"
+        )
+        try:
+            text = self._call_text(provider, client, _CONFLICT_CHECK_SYSTEM, user_msg)
+            result = self._parse_json(text)
+            if result.get("conflicts"):
+                return True, str(result.get("explanation", "LLM-detected semantic conflict"))
+        except Exception:
+            pass
         return False, ""
 
     # ── LLM calls ─────────────────────────────────────────────────────────────
