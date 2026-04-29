@@ -18,6 +18,7 @@ from core.sample_data import sample_correction_signal
 from core.session import SessionManager
 from core.storage import load_constraint
 from core.storage import load_constraints
+from core.storage import save_constraint
 
 
 @click.command("status")
@@ -207,9 +208,61 @@ def mcp_command(transport: str) -> None:
 
 
 @click.command("garden")
-def garden_command() -> None:
-    """Stub garden command."""
-    click.echo("Gardener is not implemented yet.")
+@click.option("--auto", is_flag=True, help="Reconcile and save all conflicts without prompting.")
+def garden_command(auto: bool) -> None:
+    """Scan the constraint library for conflicts and reconcile them."""
+    from gardener.gardener import Gardener
+
+    repo_root = Path.cwd()
+    constraints = load_constraints(repo_root)
+    if not constraints:
+        click.echo("No constraints found. Run 'cortex bootstrap' or add constraints first.")
+        return
+
+    click.echo(f"Scanning {len(constraints)} constraint(s) for conflicts...")
+    g = Gardener(repo_root)
+    reports = g.scan()
+
+    if not reports:
+        click.echo("No conflicts detected.")
+        return
+
+    click.echo(f"Found {len(reports)} conflict(s).\n")
+    saved = 0
+
+    for i, report in enumerate(reports, 1):
+        a, b = report.constraint_a, report.constraint_b
+        click.echo(f"── CONFLICT {i}/{len(reports)} " + "─" * 38)
+        click.echo(f"  A: {a.constraint_id}")
+        click.echo(f"     Never do: {a.never_do[0]}")
+        click.echo(f"  B: {b.constraint_id}")
+        click.echo(f"     Never do: {b.never_do[0]}")
+        click.echo(f"  Reason: {report.explanation}")
+        click.echo()
+
+        if not (auto or click.confirm("  Reconcile?", default=False)):
+            continue
+
+        click.echo("  Generating duel scenario and meta-constraint...")
+        try:
+            meta = g.reconcile(report)
+        except RuntimeError as exc:
+            click.echo(f"  Error: {exc}")
+            continue
+
+        click.echo(f"\n  Duel scenario:\n    {report.duel_scenario}\n")
+        click.echo(f"  Meta-constraint: {meta.constraint_id}")
+        click.echo(f"    Never do: {meta.never_do[0]}")
+        click.echo(f"    Instead:  {meta.instead}")
+        click.echo()
+
+        if auto or click.confirm("  Save to constraint library?", default=False):
+            save_constraint(repo_root, meta)
+            click.echo(f"  Saved: .cortex/constraints/{meta.constraint_id}.yaml\n")
+            saved += 1
+
+    summary = f"{saved} meta-constraint(s) saved." if saved else "No meta-constraints saved."
+    click.echo(f"Garden complete. {summary}")
 
 
 @click.command("view")
