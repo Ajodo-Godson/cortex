@@ -186,9 +186,12 @@ class Distiller:
                 raise RuntimeError(
                     "Set ANTHROPIC_API_KEY (or CORTEX_API_KEY) to use Claude models."
                 )
+            # CORTEX_BASE_URL is for OpenAI-compatible endpoints only.
+            # For a custom Anthropic proxy use ANTHROPIC_BASE_URL instead.
+            anthropic_base = os.environ.get("ANTHROPIC_BASE_URL")
             kwargs: dict[str, str] = {"api_key": api_key}
-            if base_url:
-                kwargs["base_url"] = base_url
+            if anthropic_base:
+                kwargs["base_url"] = anthropic_base
             return "anthropic", _anthropic.Anthropic(**kwargs)
 
         # OpenAI-compatible (OpenAI, Ollama, Groq, Together, OpenRouter, …)
