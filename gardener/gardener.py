@@ -160,7 +160,7 @@ class Gardener:
         """Generate a duel scenario and a meta-constraint resolving the conflict."""
         provider, client = _build_llm_client(self._model)
         conflict.duel_scenario = self._generate_duel(provider, client, conflict)
-        raw = self._generate_meta_constraint(provider, client, conflict)
+        raw = self._normalize_raw(self._generate_meta_constraint(provider, client, conflict))
         proposed_id = str(raw.get("constraint_id", "meta-constraint-001"))
         raw["constraint_id"] = self._next_constraint_id(proposed_id)
         raw["source"] = "inferred"
@@ -290,6 +290,19 @@ class Gardener:
         return (response.choices[0].message.content or "").strip()
 
     # ── Helpers ────────────────────────────────────────────────────────────────
+
+    def _normalize_raw(self, raw: dict[str, object]) -> dict[str, object]:
+        """Coerce fields that must be lists but LLMs sometimes return as strings."""
+        for field in ("never_do", "evidence", "ast_triggers", "services", "error_codes"):
+            val = raw.get(field)
+            if isinstance(val, str):
+                raw[field] = [val] if val else []
+            scope = raw.get("scope")
+            if isinstance(scope, dict):
+                sv = scope.get(field)
+                if isinstance(sv, str):
+                    scope[field] = [sv] if sv else []
+        return raw
 
     def _parse_json(self, text: str) -> dict[str, object]:
         text = text.strip()
