@@ -2,13 +2,23 @@
 
 A persistent constraint layer for AI coding agents. Cortex watches your sessions, learns from every correction, and injects the right rules into the next session before the same mistake happens again.
 
+## Installation
+
+**Requirements:** Python 3.11+, git, Rust (for the AST filter — `curl https://sh.rustup.rs | sh`)
+
+```bash
+git clone https://github.com/your-username/cortex
+cd cortex
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[anthropic]"   # or [openai] or [all]
+cp .env.example .env            # add your API key
+```
+
+The `cortex` command is now available in your shell.
+
 ## Quickstart
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[anthropic]"
-cp .env.example .env  # add your API key
-
 cd your-project
 cortex start
 # run your AI coding session
