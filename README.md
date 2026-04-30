@@ -15,6 +15,14 @@ git clone https://github.com/Ajodo-Godson/cortex
 cd cortex
 pipx install -e ".[anthropic]"   # or [openai] or [all]
 cp .env.example .env             # add your API key
+
+# If you plan to use the MCP server with Codex or Claude Code
+pipx inject cortex "mcp>=1.0"
+
+# Add the provider SDK matching your CORTEX_MODEL
+pipx inject cortex "anthropic>=0.50"   # for claude-* models
+# or
+pipx inject cortex "openai>=1.0"       # for all other models (NVIDIA NIM, Ollama, etc.)
 ```
 
 The `cortex` command is now available in any directory.
