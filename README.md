@@ -4,6 +4,15 @@ A persistent constraint layer for AI coding agents. Cortex watches your sessions
 
 ## Installation
 
+```bash
+curl -fsSL https://raw.githubusercontent.com/Ajodo-Godson/cortex/main/setup.sh | bash
+```
+
+Then edit `~/.cortex-src/.env` to add your API key.
+
+<details>
+<summary>Manual install</summary>
+
 **Requirements:** Python 3.11+, git, Rust (for the AST filter — `curl https://sh.rustup.rs | sh`)
 
 ```bash
@@ -26,6 +35,8 @@ pipx inject cortex "openai>=1.0"       # for all other models (NVIDIA NIM, Ollam
 ```
 
 The `cortex` command is now available in any directory.
+
+</details>
 
 ## Quickstart
 
