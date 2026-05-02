@@ -9,6 +9,7 @@ from pathlib import Path
 
 from core.coverage import record_retrieval_hit, record_unconstrained_files
 from core.schema import Constraint
+from core.shared import load_shared_constraints
 from core.storage import load_constraints
 from retrieval import ast_filter as l1
 from retrieval import semantic as l2
@@ -42,7 +43,7 @@ class Retriever:
         self.repo_root = repo_root
 
     def retrieve(self, boost: str | None = None, verbose: bool = False) -> RetrievalResult:
-        stored = load_constraints(self.repo_root)
+        stored = load_shared_constraints() + load_constraints(self.repo_root)
         if not stored:
             return self._scaffold(boost, verbose)
 
