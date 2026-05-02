@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from cli.commands import add_command
 from cli.commands import bootstrap_command
 from cli.commands import coverage_command
 from cli.commands import decay_command
@@ -19,6 +20,8 @@ from cli.commands import record_command
 from cli.commands import signal_command
 from cli.commands import show_command
 from cli.commands import status_command
+from cli.commands import share_command
+from cli.commands import shared_command
 from cli.commands import view_command
 from cli.start import start_command
 from cli.stop import stop_command
@@ -29,6 +32,7 @@ def main() -> None:
     """CORTEX command line interface."""
 
 
+main.add_command(add_command, name="add")
 main.add_command(start_command, name="start")
 main.add_command(stop_command, name="stop")
 main.add_command(status_command, name="status")
@@ -43,6 +47,8 @@ main.add_command(coverage_command, name="coverage")
 main.add_command(decay_command, name="decay")
 main.add_command(mcp_command, name="mcp")
 main.add_command(garden_command, name="garden")
+main.add_command(share_command, name="share")
+main.add_command(shared_command, name="shared")
 main.add_command(view_command, name="view")
 
 

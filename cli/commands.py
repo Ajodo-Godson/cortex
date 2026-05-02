@@ -16,6 +16,8 @@ from core.events import queue_signal
 from core.sample_data import sample_correction_event
 from core.sample_data import sample_correction_signal
 from core.session import SessionManager
+from core.shared import load_shared_constraints
+from core.shared import save_shared_constraint
 from core.storage import load_constraint
 from core.storage import load_constraints
 from core.storage import save_constraint
@@ -340,6 +342,51 @@ def garden_command(auto: bool, deep: bool) -> None:
 
     summary = f"{saved} meta-constraint(s) saved." if saved else "No meta-constraints saved."
     click.echo(f"Garden complete. {summary}")
+
+
+@click.command("add")
+@click.argument("rule")
+def add_command(rule: str) -> None:
+    """Add a constraint from a plain-English rule description."""
+    repo_root = Path.cwd()
+    click.echo("Distilling rule into a constraint...")
+    distiller = Distiller(repo_root)
+    constraint = distiller.distill_raw_signal(
+        code_context="",
+        error_context="",
+        learned_rule=rule,
+    )
+    constraint.source = "manual"
+    path = save_constraint(repo_root, constraint)
+    click.echo(f"Saved: {path.relative_to(repo_root)}")
+    click.echo(f"ID:    {constraint.constraint_id}")
+    click.echo(f"Rule:  {constraint.never_do[0]}")
+
+
+@click.command("share")
+@click.argument("constraint_id")
+def share_command(constraint_id: str) -> None:
+    """Promote a local constraint to the shared library (~/.cortex/shared/)."""
+    repo_root = Path.cwd()
+    path = repo_root / ".cortex" / "constraints" / f"{constraint_id}.yaml"
+    if not path.exists():
+        raise click.ClickException(f"Constraint not found: {constraint_id}")
+    constraint = load_constraint(path)
+    constraint.source = "shared"
+    shared_path = save_shared_constraint(constraint)
+    click.echo(f"Shared: {shared_path}")
+    click.echo(f"This constraint will now be available in all repos.")
+
+
+@click.command("shared")
+def shared_command() -> None:
+    """List constraints in the shared library."""
+    constraints = load_shared_constraints()
+    if not constraints:
+        click.echo("No shared constraints. Use 'cortex share <id>' to promote one.")
+        return
+    for c in constraints:
+        click.echo(f"{c.constraint_id}  {c.context}  confidence={c.confidence:.2f}")
 
 
 @click.command("view")
