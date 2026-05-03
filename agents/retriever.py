@@ -13,7 +13,7 @@ from core.shared import load_shared_constraints
 from core.storage import load_constraints
 from retrieval import ast_filter as l1
 from retrieval import semantic as l2
-from retrieval import reranker as l3
+from retrieval.reranker_jaccard import JaccardReranker
 
 
 _L1_SCORE = 1.5   # bonus per matched ast_trigger pattern
@@ -57,8 +57,8 @@ class Retriever:
         query = " ".join(filter(None, [branch_name, boost or ""]))
         scored = self._score_all(stored, branch_name, boost, query, l1_hits)
 
-        # L3: scope-aware reranking
-        ranked = l3.rerank(scored, language="python", max_results=5)
+        # L3: BM25 reranking — reranker is built from the full corpus so IDF is accurate
+        ranked = JaccardReranker(stored).score(scored, query=query, language="python", max_results=5)
 
         # P7: log retrieval hits to coverage map
         for c, _, _ in ranked:
