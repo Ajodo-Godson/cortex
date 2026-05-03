@@ -44,7 +44,7 @@ class Constraint(BaseModel):
     validation: str
     confidence: float = Field(ge=0.0, le=1.0)
     last_validated: dt_date | None = None
-    source: Literal["observed", "inferred"] = "observed"
+    source: Literal["observed", "inferred", "manual"] = "observed"
 
     @field_validator("constraint")
     @classmethod
