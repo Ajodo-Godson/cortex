@@ -10,7 +10,8 @@ import pytest
 from core.schema import Constraint, Scope
 from retrieval.ast_filter import scan
 from retrieval.semantic import score as semantic_score
-from retrieval.reranker import rerank
+#from retrieval.reranker import rerank
+from retrieval.reranker_jaccard import rerank
 
 
 # ── Shared fixtures ────────────────────────────────────────────────────────────
